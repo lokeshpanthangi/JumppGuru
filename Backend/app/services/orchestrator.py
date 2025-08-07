@@ -5,6 +5,10 @@ from app.models.schema import QueryRequest, QueryResponse, PageContent
 from app.utils.language_detect import detect_language
 from openai import OpenAI
 from app.db.mongodb import mongo_collection
+from app.services.vector_search import query_rag_chunks
+from app.services.web_fallback import web_fallback_answer
+
+
 
 # Load environment variables from .env file, if present
 load_dotenv()
@@ -86,7 +90,34 @@ async def handle_user_query(payload: QueryRequest) -> QueryResponse:
         script_text = "This query requires search (RAG/Web), which is coming next."
         source = "Search"
 
-    # Store query and response in MongoDB (async-unsafe pymongo, but okay for your case)
+        # BASIC RAG
+        chunks = await query_rag_chunks(query)
+
+        if chunks:
+            context = "\n".join([c["text"] for c in chunks])
+            prompt = f"""Use the following context to answer clearly:\n\n{context}\n\nQuestion: {query}"""
+
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "Be clear, educational."},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+
+            script_text = response.choices[0].message.content
+            source = "RAG"
+        else:
+            # script_text = "No educational content found. Web fallback not yet implemented."
+            # source = "RAG-Miss"
+            # Web fallback (if no good RAG chunks)
+            script_text = await web_fallback_answer(query)
+            source = "Web"
+
+
+
+
+        # Store query and response in MongoDB (async-unsafe pymongo, but okay for your case)
         try:
             mongo_collection.insert_one({
                 "query": query,
