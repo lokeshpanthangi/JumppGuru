@@ -12,6 +12,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
   const [message, setMessage] = useState('');
   const [showModeDropdown, setShowModeDropdown] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -84,62 +85,66 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
   const ModeIcon = getModeIcon();
 
   return (
-    <div className={`relative ${centered ? 'w-full max-w-2xl mx-auto' : 'w-full'}`}>
+    <div className={`relative ${centered ? 'w-full max-w-4xl mx-auto' : 'w-full'}`}>
       <form onSubmit={handleSubmit} className="relative">
-        <div className={`relative flex items-end gap-3 p-4 transition-all duration-300 rounded-xl shadow-md ${
-          centered ? 'shadow-elevated' : ''
-        } ${
-          isFocused || message.trim() 
-            ? 'bg-surface-elevated border-2 border-brand-primary' 
-            : 'bg-surface-elevated border border-input-border'
-        }`}>
+        <div 
+          className={`relative flex items-center gap-3 rounded-xl shadow-md transition-all duration-300 ease-out transform ${
+            centered ? 'p-6 shadow-elevated' : 'p-4'
+          } ${
+            isFocused
+              ? 'bg-surface-elevated border-2 border-green-400 scale-[1.02] shadow-lg'
+              : isHovered
+              ? 'bg-surface-elevated border border-input-border scale-[1.01] shadow-lg'
+              : 'bg-surface-elevated border border-input-border scale-100'
+          }`}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
           {/* Mode Selection Button */}
-          <div className="relative" ref={dropdownRef}>
+          <div className="relative flex items-center" ref={dropdownRef}>
             <button
               type="button"
               onClick={() => setShowModeDropdown(!showModeDropdown)}
-              className={`flex-shrink-0 p-2 rounded-lg transition-colors duration-fast hover:bg-button-secondary ${getModeColor()}`}
+              className={`flex-shrink-0 p-2 rounded-lg transition-all duration-300 ease-out transform hover:bg-button-secondary hover:scale-110 hover:rotate-12 active:scale-95 ${getModeColor()} self-center ${
+                showModeDropdown ? 'scale-110 bg-button-secondary' : ''
+              }`}
               aria-label="Select mode"
             >
-              <ModeIcon className="w-5 h-5" />
+              <ModeIcon className={`w-5 h-5 transition-all duration-300 ${
+                showModeDropdown ? 'rotate-180' : ''
+              }`} />
             </button>
 
             {/* Mode Dropdown */}
             {showModeDropdown && (
-              <div className="absolute bottom-full left-0 mb-2 w-48 bg-surface-elevated border border-input-border rounded-lg shadow-lg overflow-hidden z-10">
+              <div className="absolute bottom-full left-0 mb-2 w-40 bg-surface-elevated border border-input-border rounded-lg shadow-lg overflow-hidden z-10">
                 <button
                   type="button"
                   onClick={() => handleModeSelect('web')}
-                  className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-button-secondary transition-colors duration-fast ${
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-button-secondary transition-colors ${
                     state.currentMode === 'web' ? 'bg-sidebar-item-active' : ''
                   }`}
                 >
                   <Search className="w-4 h-4 text-brand-primary" />
-                  <div>
-                    <div className="text-sm font-medium text-text-primary">Web Search</div>
-                    <div className="text-xs text-text-muted">Search across the internet</div>
-                  </div>
+                  <span className="text-sm text-text-primary">Web Search</span>
                 </button>
                 
                 <button
                   type="button"
                   onClick={() => handleModeSelect('research')}
-                  className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-button-secondary transition-colors duration-fast ${
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-button-secondary transition-colors ${
                     state.currentMode === 'research' ? 'bg-sidebar-item-active' : ''
                   }`}
                 >
                   <Globe className="w-4 h-4 text-brand-primary" />
-                  <div>
-                    <div className="text-sm font-medium text-text-primary">Research</div>
-                    <div className="text-xs text-text-muted">Deep research and analysis</div>
-                  </div>
+                  <span className="text-sm text-text-primary">Research</span>
                 </button>
               </div>
             )}
           </div>
 
           {/* Input Field */}
-          <div className="flex-1 relative">
+          <div className="flex-1 relative flex items-center">
             <textarea
               ref={inputRef}
               value={message}
@@ -148,9 +153,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
               placeholder={getPlaceholder()}
-              className="w-full bg-transparent text-text-primary placeholder:text-text-muted resize-none outline-none min-h-[24px] max-h-32 overflow-y-auto scrollbar-thin"
-              rows={1}
+              className={`w-full bg-transparent text-text-primary placeholder:text-text-muted resize-none outline-none overflow-y-auto scrollbar-thin transition-all duration-300 ease-out flex items-center ${
+                centered ? 'min-h-[36px] max-h-48 text-lg leading-9' : 'min-h-[24px] max-h-32 leading-6'
+              } ${
+                isFocused ? 'transform scale-[1.01]' : ''
+              }`}
+              rows={centered ? 2 : 1}
               disabled={state.isTyping}
+              style={{ paddingTop: centered ? '8px' : '4px', paddingBottom: centered ? '8px' : '4px' }}
             />
             
             {/* Clear Mode Button */}
@@ -158,7 +168,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
               <button
                 type="button"
                 onClick={() => setMode(null)}
-                className="absolute top-1 right-1 p-1 text-text-muted hover:text-text-secondary transition-colors duration-fast"
+                className="absolute top-1 right-1 p-1 text-text-muted hover:text-text-secondary transition-all duration-200 ease-out transform hover:scale-125 hover:rotate-90 active:scale-90 rounded-full hover:bg-button-secondary"
                 aria-label="Clear mode"
               >
                 <X className="w-3 h-3" />
@@ -170,26 +180,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
           <button
             type="submit"
             disabled={!message.trim() || state.isTyping}
-            className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 ${
+            className={`flex-shrink-0 rounded-full flex items-center justify-center transition-all duration-300 ease-out self-center group ${
+              centered ? 'w-12 h-12' : 'w-10 h-10'
+            } ${
               message.trim() && !state.isTyping
-                ? 'bg-brand-primary hover:bg-brand-primary-hover text-white shadow-md hover:shadow-lg transform hover:scale-105 hover:rotate-12'
-                : 'bg-button-secondary text-text-muted cursor-not-allowed'
+                ? 'bg-brand-primary hover:bg-brand-primary-hover text-white shadow-md hover:shadow-xl transform hover:scale-110 hover:rotate-12 active:scale-95 active:rotate-0'
+                : 'bg-button-secondary text-text-muted cursor-not-allowed transform scale-90 opacity-60'
             }`}
             aria-label="Send message"
           >
-            <Zap className="w-4 h-4" />
+            <Zap className={`${centered ? 'w-5 h-5' : 'w-4 h-4'} transition-all duration-300 ${
+              message.trim() && !state.isTyping ? 'group-hover:scale-110' : ''
+            }`} />
           </button>
         </div>
 
-        {/* Mode Indicator */}
-        {state.currentMode && (
-          <div className="absolute -top-8 left-4 flex items-center gap-2 px-3 py-1 bg-surface-elevated border border-input-border rounded-full text-xs">
-            <ModeIcon className="w-3 h-3 text-brand-primary" />
-            <span className="text-text-secondary">
-              {state.currentMode === 'web' ? 'Web Search' : 'Research'} mode
-            </span>
-          </div>
-        )}
+
       </form>
     </div>
   );
