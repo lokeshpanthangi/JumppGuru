@@ -108,7 +108,7 @@ export function useLiveKit(callbacks?: LiveKitCallbacks) {
 
       // Handle connection errors
       room.on(RoomEvent.ConnectionStateChanged, (state) => {
-        if (state === 'failed' || state === 'closed') {
+        if (state === 'disconnected') {
           reject(new Error(`Connection failed: ${state}`));
         }
       });

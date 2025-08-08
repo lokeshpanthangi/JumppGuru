@@ -20,14 +20,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
   // LiveKit integration
   const liveKit = useLiveKit({
     onMessage: async (message: string) => {
-      // Handle incoming messages and generate voice responses
+      // Handle incoming messages and add them to chat
       console.log('LiveKit message received:', message);
-      try {
-        // Generate voice response using the message
-        await liveKit.generateAndStreamVoiceResponse(message);
-      } catch (error) {
-        console.error('Error generating voice response:', error);
-      }
+      addAIMessage(message);
     },
     onStatusChange: (status: string) => {
       console.log('LiveKit status:', status);

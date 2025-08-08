@@ -272,16 +272,17 @@ const QuizMessage: React.FC<QuizMessageProps> = ({ question, timestamp }) => {
   const handleAnswerSelect = (option: string) => {
     setSelectedAnswer(option);
     setShowExplanation(true);
+    console.log('Selected:', option, 'Correct:', question.correct, 'Match:', option === question.correct);
   };
 
   const isCorrect = selectedAnswer === question.correct;
 
   return (
     <div className="space-y-3 group relative max-w-[120%]">
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+      <div className="bg-blue-50 dark:bg-gray-800/50 border border-blue-200 dark:border-gray-600 rounded-lg p-4">
         <div className="flex items-center gap-2 mb-3">
-          <Brain className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-          <span className="font-semibold text-blue-800 dark:text-blue-300">Quiz Question</span>
+          <Brain className="w-5 h-5 text-blue-600 dark:text-gray-400" />
+          <span className="font-semibold text-blue-800 dark:text-gray-300">Quiz Question</span>
         </div>
         
         <h3 className="text-lg font-medium text-text-primary mb-4">{question.question}</h3>
@@ -294,7 +295,7 @@ const QuizMessage: React.FC<QuizMessageProps> = ({ question, timestamp }) => {
               disabled={selectedAnswer !== null}
               className={`w-full text-left p-3 rounded-lg border transition-all ${
                 selectedAnswer === null
-                  ? 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/10'
+                  ? 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-gray-500 hover:bg-blue-50 dark:hover:bg-gray-700/30'
                   : selectedAnswer === key
                   ? key === question.correct
                     ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300'
@@ -513,7 +514,13 @@ Recent conversation:\n${chatHistory}`;
           
           // Add quiz questions as chat messages
           questions.forEach((question: any, index: number) => {
-            addQuizMessage(JSON.stringify(question));
+            // Clean and validate the question data
+            const cleanedQuestion = {
+              ...question,
+              correct: question.correct?.trim?.() || question.correct
+            };
+            console.log('Adding quiz question:', cleanedQuestion);
+            addQuizMessage(JSON.stringify(cleanedQuestion));
           });
           
         } catch (parseError) {
@@ -533,9 +540,7 @@ Recent conversation:\n${chatHistory}`;
 
   return (
     <div 
-      className={`flex-1 flex flex-col bg-chat-bg transition-all duration-500 ease-in-out h-screen ${
-        state.sidebarCollapsed ? 'ml-16' : 'ml-80'
-      }`}
+      className="flex-1 flex flex-col bg-chat-bg transition-all duration-500 ease-in-out h-screen"
     >
       {/* Aurora Effect */}
       <div className={`transition-opacity duration-1000 ease-in-out ${
