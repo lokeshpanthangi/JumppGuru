@@ -7,7 +7,12 @@ import os
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-async def web_fallback_answer(query: str) -> str:
+async def web_fallback_answer(query: str, history=None) -> str:
+    """
+    Web fallback for queries not answered by direct LLM or RAG.
+    Scrapes, summarizes, stores in vector DB, and answers with history context.
+    """
+
     urls = await web_search(query)
     print("i GOT THE URLS")
     print(urls)
@@ -27,14 +32,17 @@ async def web_fallback_answer(query: str) -> str:
     await chunk_and_store_summary(context, query, str(urls))
 
 
-    # Final answer
-    prompt = f"Use the following web content to answer the user's question:\n\n{context}\n\nQuestion: {query}"
+    # Final LLM prompt with history included
+    messages = [{"role": "system", "content": "You're a helpful educational assistant."}]
+    
+    if history:
+        messages.extend(history)  # Append last N user+assistant turns
+    
+    messages.append({"role": "user", "content": f"Use the following web content to answer the user's question:\n\n{context}\n\nQuestion: {query}"})
+
     final = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You're a helpful educational assistant."},
-            {"role": "user", "content": prompt}
-        ]
+        messages=messages
     )
 
     return final.choices[0].message.content
