@@ -113,9 +113,7 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div 
-      className={`flex-1 bg-chat-bg transition-all duration-500 ease-in-out ${
-        state.sidebarCollapsed ? 'ml-16' : 'ml-80'
-      } relative overflow-hidden`}
+      className="flex-1 bg-chat-bg transition-all duration-500 ease-in-out relative overflow-hidden"
     >
       {/* Floating Orbs */}
       <FloatingOrb 

@@ -23,6 +23,22 @@ export default {
 				border: 'hsl(var(--border))',
 				ring: 'hsl(var(--ring))',
 				
+				// Shadcn UI required variables
+				primary: 'hsl(var(--brand-primary))',
+				'primary-foreground': 'hsl(var(--brand-primary-foreground))',
+				secondary: 'hsl(var(--button-secondary))',
+				'secondary-foreground': 'hsl(var(--text-primary))',
+				destructive: 'hsl(var(--danger))',
+				'destructive-foreground': 'hsl(var(--danger-foreground))',
+				muted: 'hsl(var(--surface))',
+				'muted-foreground': 'hsl(var(--text-muted))',
+				accent: 'hsl(var(--surface-elevated))',
+				'accent-foreground': 'hsl(var(--text-primary))',
+				popover: 'hsl(var(--surface-elevated))',
+				'popover-foreground': 'hsl(var(--text-primary))',
+				card: 'hsl(var(--surface))',
+				'card-foreground': 'hsl(var(--text-primary))',
+				
 				// Core semantic colors
 				background: 'hsl(var(--background))',
 				foreground: 'hsl(var(--foreground))',
@@ -59,11 +75,10 @@ export default {
 				},
 				
 				// Input elements
-				input: {
-					bg: 'hsl(var(--input-bg))',
-					border: 'hsl(var(--input-border))',
-					focus: 'hsl(var(--input-focus))'
-				},
+				input: 'hsl(var(--border))',
+				'input-bg': 'hsl(var(--input-bg))',
+				'input-border': 'hsl(var(--input-border))',
+				'input-focus': 'hsl(var(--input-focus))',
 				
 				// Interactive elements
 				button: {
@@ -98,7 +113,8 @@ export default {
 			transitionDuration: {
 				'fast': '150ms',
 				'normal': '300ms',
-				'slow': '500ms'
+				'slow': '500ms',
+				'sidebar': '400ms'
 			},
 			transitionTimingFunction: {
 				'smooth': 'cubic-bezier(0.4, 0, 0.2, 1)',

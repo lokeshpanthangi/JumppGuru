@@ -9,9 +9,11 @@ import {
   Circle,
   Menu,
   LogOut,
-  UserCircle
+  UserCircle,
+  Brain
 } from 'lucide-react';
 import { useChatContext } from '../contexts/ChatContext';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 const formatChatDate = (date: Date): string => {
   const now = new Date();
@@ -50,14 +52,24 @@ export const Sidebar: React.FC = () => {
     toggleSidebar, 
     setDashboard 
   } = useChatContext();
+  const location = useLocation();
+  const navigate = useNavigate();
   
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
 
   const handleNewChat = () => {
+    // If we're not on the main page, navigate there first
+    if (location.pathname !== '/') {
+      navigate('/');
+    }
     createNewChat();
   };
 
   const handleChatSelect = (chatId: string) => {
+    // If we're not on the main page, navigate there first
+    if (location.pathname !== '/') {
+      navigate('/');
+    }
     selectChat(chatId);
   };
 
@@ -67,6 +79,10 @@ export const Sidebar: React.FC = () => {
   };
 
   const handleDashboard = () => {
+    // Navigate to main page and show dashboard
+    if (location.pathname !== '/') {
+      navigate('/');
+    }
     setDashboard(true);
   };
 
@@ -86,14 +102,14 @@ export const Sidebar: React.FC = () => {
     <>
       {/* Sidebar */}
       <aside 
-        className={`fixed left-0 top-0 h-full bg-sidebar-bg border-r border-sidebar-border transition-all duration-sidebar z-40 ${
+        className={`h-full bg-sidebar-bg border-r border-sidebar-border transition-all duration-sidebar ease-sidebar flex-shrink-0 ${
           state.sidebarCollapsed ? 'w-16' : 'w-80'
         }`}
       >
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className={`border-b border-sidebar-border ${state.sidebarCollapsed ? 'p-3' : 'p-6'}`}>
-            <div className={`flex items-center gap-3 ${state.sidebarCollapsed ? 'justify-center mb-3' : 'justify-between mb-6'}`}>
+          <div className={`border-b border-sidebar-border transition-all duration-sidebar ease-sidebar ${state.sidebarCollapsed ? 'p-3' : 'p-6'}`}>
+            <div className={`flex items-center gap-3 transition-all duration-sidebar ease-sidebar ${state.sidebarCollapsed ? 'justify-center mb-3' : 'justify-between mb-6'}`}>
               <div className="flex items-center gap-3">
                 <div 
                   className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center cursor-pointer"
@@ -119,22 +135,37 @@ export const Sidebar: React.FC = () => {
             <div className="space-y-3">
               <button
                 onClick={handleDashboard}
-                className={`w-full flex items-center ${state.sidebarCollapsed ? 'justify-center px-2 py-3' : 'gap-3 px-4 py-3'} rounded-lg transition-all duration-fast text-left ${
-                  state.showDashboard
+                className={`w-full flex items-center transition-all duration-sidebar ease-sidebar ${state.sidebarCollapsed ? 'justify-center px-2 py-3' : 'gap-3 px-4 py-3'} rounded-lg text-left ${
+                  state.showDashboard && location.pathname === '/'
                     ? 'bg-[hsl(var(--input-mint-bg))] border border-[hsl(var(--input-mint-border))] shadow-[0_0_8px_hsl(var(--input-mint-glow))]'
                     : 'bg-button-secondary hover:bg-button-secondary-hover'
                 }`}
                 title={state.sidebarCollapsed ? 'Dashboard' : ''}
               >
-                <Grid3X3 className={`w-5 h-5 ${state.showDashboard ? 'text-brand-primary' : 'text-text-secondary'}`} />
+                <Grid3X3 className={`w-5 h-5 ${state.showDashboard && location.pathname === '/' ? 'text-brand-primary' : 'text-text-secondary'}`} />
                 {!state.sidebarCollapsed && (
-                  <span className={`font-medium ${state.showDashboard ? 'text-brand-primary' : 'text-text-primary'}`}>Dashboard</span>
+                  <span className={`font-medium ${state.showDashboard && location.pathname === '/' ? 'text-brand-primary' : 'text-text-primary'}`}>Dashboard</span>
                 )}
               </button>
               
+              <Link
+                to="/deep-learning"
+                className={`w-full flex items-center transition-all duration-sidebar ease-sidebar ${state.sidebarCollapsed ? 'justify-center px-2 py-3' : 'gap-3 px-4 py-3'} rounded-lg text-left ${
+                  location.pathname === '/deep-learning'
+                    ? 'bg-[hsl(var(--input-mint-bg))] border border-[hsl(var(--input-mint-border))] shadow-[0_0_8px_hsl(var(--input-mint-glow))]'
+                    : 'bg-button-secondary hover:bg-button-secondary-hover'
+                }`}
+                title={state.sidebarCollapsed ? 'Deep Learning' : ''}
+              >
+                <Brain className={`w-5 h-5 ${location.pathname === '/deep-learning' ? 'text-brand-primary' : 'text-text-secondary'}`} />
+                {!state.sidebarCollapsed && (
+                  <span className={`font-medium ${location.pathname === '/deep-learning' ? 'text-brand-primary' : 'text-text-primary'}`}>Deep Learning</span>
+                )}
+              </Link>
+              
               <button
                 onClick={handleNewChat}
-                className={`w-full flex items-center ${state.sidebarCollapsed ? 'justify-center px-2 py-3' : 'gap-3 px-4 py-3'} rounded-lg transition-all duration-fast ${
+                className={`w-full flex items-center transition-all duration-sidebar ease-sidebar ${state.sidebarCollapsed ? 'justify-center px-2 py-3' : 'gap-3 px-4 py-3'} rounded-lg ${
                   !state.showDashboard && !state.currentChatId
                     ? 'bg-[hsl(var(--input-mint-bg))] border border-[hsl(var(--input-mint-border))] shadow-[0_0_8px_hsl(var(--input-mint-glow))] text-brand-primary'
                     : 'bg-brand-primary hover:bg-brand-primary-hover text-white'
@@ -150,9 +181,9 @@ export const Sidebar: React.FC = () => {
           </div>
 
           {/* Chat History */}
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-hidden">
             {!state.sidebarCollapsed && (
-              <div className="p-4">
+              <div className="flex-shrink-0 p-4">
                 <h3 className="text-sm font-medium text-text-secondary mb-3">Chat History</h3>
               </div>
             )}
@@ -217,9 +248,9 @@ export const Sidebar: React.FC = () => {
           </div>
 
           {/* User Section */}
-          <div className={`border-t border-sidebar-border ${state.sidebarCollapsed ? 'p-3' : 'p-4'}`}>
-            <div className={`flex items-center ${state.sidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
-              <div className={`flex items-center ${state.sidebarCollapsed ? 'flex-col gap-1' : 'gap-3'}`}>
+          <div className={`border-t border-sidebar-border transition-all duration-sidebar ease-sidebar ${state.sidebarCollapsed ? 'p-3' : 'p-4'}`}>
+            <div className={`flex items-center transition-all duration-sidebar ease-sidebar ${state.sidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
+              <div className={`flex items-center transition-all duration-sidebar ease-sidebar ${state.sidebarCollapsed ? 'flex-col gap-1' : 'gap-3'}`}>
                 <div className="relative">
                   <div className="w-8 h-8 bg-brand-primary rounded-full flex items-center justify-center">
                     <User className="w-4 h-4 text-white" />

@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import OpenAI from 'openai';
 
 export type Message = {
   id: string;
   content: string;
-  type: 'user' | 'ai';
+  type: 'user' | 'ai' | 'quiz';
   timestamp: Date;
   mode?: 'web' | 'research';
 };
@@ -30,6 +31,8 @@ type ChatState = {
   userName: string;
   isTyping: boolean;
   currentMode: ChatMode;
+  showAurora: boolean;
+  isLiveMode: boolean;
 };
 
 type ChatAction =
@@ -43,6 +46,8 @@ type ChatAction =
   | { type: 'SET_USER_NAME'; name: string }
   | { type: 'SET_TYPING'; isTyping: boolean }
   | { type: 'SET_MODE'; mode: ChatMode }
+  | { type: 'TOGGLE_AURORA' }
+  | { type: 'TOGGLE_LIVE_MODE' }
   | { type: 'LOAD_STATE'; state: Partial<ChatState> };
 
 const initialState: ChatState = {
@@ -55,6 +60,8 @@ const initialState: ChatState = {
   userName: 'User',
   isTyping: false,
   currentMode: null,
+  showAurora: false,
+  isLiveMode: false,
 };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -134,6 +141,12 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'SET_MODE':
       return { ...state, currentMode: action.mode };
     
+    case 'TOGGLE_AURORA':
+      return { ...state, showAurora: !state.showAurora };
+    
+    case 'TOGGLE_LIVE_MODE':
+      return { ...state, isLiveMode: !state.isLiveMode };
+    
     case 'LOAD_STATE':
       return { ...state, ...action.state };
     
@@ -148,11 +161,15 @@ type ChatContextType = {
   selectChat: (chatId: string) => void;
   deleteChat: (chatId: string) => void;
   sendMessage: (content: string, mode?: ChatMode) => Promise<void>;
+  addAIMessage: (content: string) => void;
+  addQuizMessage: (content: string) => void;
   setTheme: (theme: Theme) => void;
   toggleSidebar: () => void;
   setDashboard: (show: boolean) => void;
   setUserName: (name: string) => void;
   setMode: (mode: ChatMode) => void;
+  toggleAurora: () => void;
+  toggleLiveMode: () => void;
 };
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -236,27 +253,66 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'ADD_MESSAGE', chatId, message: userMessage });
     dispatch({ type: 'SET_TYPING', isTyping: true });
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponses = [
-        "I understand your question. Let me help you with that.",
-        "That's an interesting point. Here's what I think...",
-        "Based on your query, I can provide the following insights:",
-        "Great question! Let me break this down for you.",
-        "I'd be happy to help you explore this topic further.",
+    try {
+      // Initialize OpenAI client
+      const openai = new OpenAI({
+        apiKey: import.meta.env.VITE_OPENAI_API_KEY,
+        dangerouslyAllowBrowser: true // Note: In production, use a backend proxy
+      });
+
+      // Prepare system message based on mode
+      let systemMessage = "You are JumppGuru, a helpful AI assistant.";
+      if (mode === 'web') {
+        systemMessage += " You are in web search mode. Provide comprehensive answers with web-based information.";
+      } else if (mode === 'research') {
+        systemMessage += " You are in research mode. Provide detailed, analytical responses with thorough explanations.";
+      }
+
+      // Get conversation history for context
+      const conversationHistory = state.currentChat?.messages.slice(-10) || []; // Last 10 messages for context
+      const messages = [
+        { role: 'system' as const, content: systemMessage },
+        ...conversationHistory.map(msg => ({
+          role: msg.type === 'user' ? 'user' as const : 'assistant' as const,
+          content: msg.content
+        })),
+        { role: 'user' as const, content: content.trim() }
       ];
 
+      // Call OpenAI API
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-3.5-turbo',
+        messages: messages,
+        max_tokens: 1000,
+        temperature: 0.7,
+      });
+
+      const aiResponse = completion.choices[0]?.message?.content || 'Sorry, I could not generate a response.';
       const modePrefix = mode === 'web' ? '[Web Search] ' : mode === 'research' ? '[Research] ' : '';
+      
       const aiMessage: Message = {
         id: `msg-${Date.now()}-ai`,
-        content: modePrefix + aiResponses[Math.floor(Math.random() * aiResponses.length)],
+        content: modePrefix + aiResponse,
         type: 'ai',
         timestamp: new Date(),
       };
 
       dispatch({ type: 'ADD_MESSAGE', chatId, message: aiMessage });
+    } catch (error) {
+      console.error('OpenAI API Error:', error);
+      
+      // Fallback response in case of API error
+      const errorMessage: Message = {
+        id: `msg-${Date.now()}-ai`,
+        content: 'Sorry, I encountered an error while processing your request. Please check your API key configuration and try again.',
+        type: 'ai',
+        timestamp: new Date(),
+      };
+
+      dispatch({ type: 'ADD_MESSAGE', chatId, message: errorMessage });
+    } finally {
       dispatch({ type: 'SET_TYPING', isTyping: false });
-    }, 1500);
+    }
   };
 
   const setTheme = (theme: Theme) => {
@@ -279,17 +335,61 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'SET_MODE', mode });
   };
 
+  const toggleAurora = () => {
+    dispatch({ type: 'TOGGLE_AURORA' });
+  };
+
+  const toggleLiveMode = () => {
+    dispatch({ type: 'TOGGLE_LIVE_MODE' });
+  };
+
+  const addAIMessage = (content: string) => {
+    let chatId = state.currentChatId;
+    if (!chatId) {
+      chatId = createNewChat();
+    }
+
+    const aiMessage: Message = {
+      id: `msg-${Date.now()}-ai`,
+      content,
+      type: 'ai',
+      timestamp: new Date(),
+    };
+
+    dispatch({ type: 'ADD_MESSAGE', chatId, message: aiMessage });
+  };
+
+  const addQuizMessage = (content: string) => {
+    let chatId = state.currentChatId;
+    if (!chatId) {
+      chatId = createNewChat();
+    }
+
+    const quizMessage: Message = {
+      id: `quiz-${Date.now()}`,
+      content,
+      type: 'quiz',
+      timestamp: new Date(),
+    };
+
+    dispatch({ type: 'ADD_MESSAGE', chatId, message: quizMessage });
+  };
+
   const value: ChatContextType = {
     state,
     createNewChat,
     selectChat,
     deleteChat,
     sendMessage,
+    addAIMessage,
+    addQuizMessage,
     setTheme,
     toggleSidebar,
     setDashboard,
     setUserName,
     setMode,
+    toggleAurora,
+    toggleLiveMode,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
