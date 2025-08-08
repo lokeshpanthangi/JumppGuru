@@ -3,6 +3,7 @@ from typing import List, Optional
 
 class QueryRequest(BaseModel):
     query: str
+    user_id: Optional[str] = None
     lang: Optional[str] = "auto"  # auto | english | hinglish
     mode: Optional[str] = "general"  # general | web
 
@@ -21,3 +22,29 @@ class QueryResponse(BaseModel):
     source: str  # e.g. LLM, RAG, WEB
     language: str
     lesson: List[PageContent]
+
+# New models for MCQ endpoint:
+class MCQItem(BaseModel):
+    question: str
+    options: List[str]
+    answer: str
+    explanation: Optional[str] = None
+
+class GenerateMCQRequest(BaseModel):
+    user_id: str
+    num_questions: Optional[int] = 8
+    difficulty: Optional[str] = "medium"  # easy | medium | hard
+
+class GenerateMCQResponse(BaseModel):
+    user_id: str
+    mcqs: List[MCQItem]
+    source: str  # "generated" | "cached"
+
+class ChatItem(BaseModel):
+    query: str
+    response: str
+
+class GenerateLessonRequest(BaseModel):
+    user_id: str
+    category: str
+    chats: List[ChatItem]
