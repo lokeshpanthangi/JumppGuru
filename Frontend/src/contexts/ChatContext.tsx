@@ -4,7 +4,7 @@ import OpenAI from 'openai';
 export type Message = {
   id: string;
   content: string;
-  type: 'user' | 'ai';
+  type: 'user' | 'ai' | 'quiz';
   timestamp: Date;
   mode?: 'web' | 'research';
 };
@@ -162,6 +162,7 @@ type ChatContextType = {
   deleteChat: (chatId: string) => void;
   sendMessage: (content: string, mode?: ChatMode) => Promise<void>;
   addAIMessage: (content: string) => void;
+  addQuizMessage: (content: string) => void;
   setTheme: (theme: Theme) => void;
   toggleSidebar: () => void;
   setDashboard: (show: boolean) => void;
@@ -358,6 +359,22 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'ADD_MESSAGE', chatId, message: aiMessage });
   };
 
+  const addQuizMessage = (content: string) => {
+    let chatId = state.currentChatId;
+    if (!chatId) {
+      chatId = createNewChat();
+    }
+
+    const quizMessage: Message = {
+      id: `quiz-${Date.now()}`,
+      content,
+      type: 'quiz',
+      timestamp: new Date(),
+    };
+
+    dispatch({ type: 'ADD_MESSAGE', chatId, message: quizMessage });
+  };
+
   const value: ChatContextType = {
     state,
     createNewChat,
@@ -365,6 +382,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     deleteChat,
     sendMessage,
     addAIMessage,
+    addQuizMessage,
     setTheme,
     toggleSidebar,
     setDashboard,

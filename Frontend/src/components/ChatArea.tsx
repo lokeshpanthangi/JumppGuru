@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Search, Globe, Copy, ThumbsUp, ThumbsDown, Volume2, VolumeX } from 'lucide-react';
+import { Search, Globe, Copy, ThumbsUp, ThumbsDown, Volume2, VolumeX, Brain } from 'lucide-react';
 import { useChatContext } from '../contexts/ChatContext';
 import { ChatInput } from './ChatInput';
 import { TypingAnimation } from './ui/typing-animation';
@@ -248,14 +248,100 @@ const formatMessageTime = (date: Date | string): string => {
   });
 };
 
+interface QuizQuestion {
+  question: string;
+  options: {
+    A: string;
+    B: string;
+    C: string;
+    D: string;
+  };
+  correct: string;
+  explanation: string;
+}
+
+interface QuizMessageProps {
+  question: QuizQuestion;
+  timestamp: Date;
+}
+
+const QuizMessage: React.FC<QuizMessageProps> = ({ question, timestamp }) => {
+  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+  const [showExplanation, setShowExplanation] = useState(false);
+
+  const handleAnswerSelect = (option: string) => {
+    setSelectedAnswer(option);
+    setShowExplanation(true);
+  };
+
+  const isCorrect = selectedAnswer === question.correct;
+
+  return (
+    <div className="space-y-3 group relative max-w-[120%]">
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Brain className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          <span className="font-semibold text-blue-800 dark:text-blue-300">Quiz Question</span>
+        </div>
+        
+        <h3 className="text-lg font-medium text-text-primary mb-4">{question.question}</h3>
+        
+        <div className="space-y-2 mb-4">
+          {Object.entries(question.options).map(([key, value]) => (
+            <button
+              key={key}
+              onClick={() => handleAnswerSelect(key)}
+              disabled={selectedAnswer !== null}
+              className={`w-full text-left p-3 rounded-lg border transition-all ${
+                selectedAnswer === null
+                  ? 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/10'
+                  : selectedAnswer === key
+                  ? key === question.correct
+                    ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300'
+                    : 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300'
+                  : key === question.correct
+                  ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300'
+                  : 'border-gray-200 dark:border-gray-700 opacity-50'
+              }`}
+            >
+              <span className="font-medium">{key}.</span> {value}
+            </button>
+          ))}
+        </div>
+        
+        {showExplanation && (
+          <div className={`p-3 rounded-lg ${
+            isCorrect 
+              ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+              : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+          }`}>
+            <div className="flex items-center gap-2 mb-2">
+              {isCorrect ? (
+                <span className="text-green-600 dark:text-green-400 font-semibold">✓ Correct!</span>
+              ) : (
+                <span className="text-red-600 dark:text-red-400 font-semibold">✗ Incorrect</span>
+              )}
+            </div>
+            <p className="text-sm text-text-secondary">
+              <strong>Explanation:</strong> {question.explanation}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export const ChatArea: React.FC = () => {
-  const { state } = useChatContext();
+  const { state, addQuizMessage, addAIMessage } = useChatContext();
   const [showCenteredInput, setShowCenteredInput] = useState(true);
   const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
   const [likedMessages, setLikedMessages] = useState<Set<string>>(new Set());
   const [dislikedMessages, setDislikedMessages] = useState<Set<string>>(new Set());
   const [playingVoice, setPlayingVoice] = useState<string | null>(null);
+
+  const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -354,6 +440,97 @@ export const ChatArea: React.FC = () => {
     }
   };
 
+  const handleGenerateQuiz = async () => {
+    if (!state.currentChat?.messages.length) return;
+    
+    setIsGeneratingQuiz(true);
+    try {
+      // Get only the last 5 messages from current chat
+      const recentMessages = state.currentChat.messages.slice(-5);
+      const chatHistory = recentMessages
+        .map(msg => `${msg.type === 'user' ? 'User' : 'Assistant'}: ${msg.content}`)
+        .join('\n\n');
+      
+      // Generate random number of questions (3-7)
+      const numQuestions = Math.floor(Math.random() * 5) + 3;
+      
+      const quizPrompt = `Based on the following recent conversation, generate exactly ${numQuestions} multiple choice quiz questions to test understanding of the topics discussed. Each question should have 4 options (A, B, C, D) with only one correct answer. 
+
+IMPORTANT: Respond with ONLY a valid JSON array, no markdown formatting or code blocks. Use this exact structure:
+
+[
+  {
+    "question": "Question text here?",
+    "options": {
+      "A": "Option A text",
+      "B": "Option B text", 
+      "C": "Option C text",
+      "D": "Option D text"
+    },
+    "correct": "A",
+    "explanation": "Brief explanation of why this is correct"
+  }
+]
+
+Recent conversation:\n${chatHistory}`;
+      
+      // Use the existing OpenAI setup from ChatContext
+      const OpenAI = (await import('openai')).default;
+      const openai = new OpenAI({
+        apiKey: import.meta.env.VITE_OPENAI_API_KEY,
+        dangerouslyAllowBrowser: true
+      });
+      
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-3.5-turbo',
+        messages: [{ role: 'user', content: quizPrompt }],
+        max_tokens: 2000,
+        temperature: 0.7,
+      });
+      
+      const response = completion.choices[0]?.message?.content;
+      if (response) {
+        try {
+          // Clean the response to extract JSON from markdown code blocks if present
+          let cleanedResponse = response.trim();
+          
+          // Remove markdown code block formatting if present
+          if (cleanedResponse.startsWith('```json')) {
+            cleanedResponse = cleanedResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+          } else if (cleanedResponse.startsWith('```')) {
+            cleanedResponse = cleanedResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
+          }
+          
+          const questions = JSON.parse(cleanedResponse);
+          
+          // Add quiz header message first
+          const quizHeader = {
+            type: 'quiz-header',
+            content: `Quiz Time! 🧠 (${questions.length} questions)`,
+            timestamp: new Date()
+          };
+          addAIMessage(`🧠 **Quiz Time!** I've generated ${questions.length} questions based on our conversation. Test your knowledge!`);
+          
+          // Add quiz questions as chat messages
+          questions.forEach((question: any, index: number) => {
+            addQuizMessage(JSON.stringify(question));
+          });
+          
+        } catch (parseError) {
+          console.error('Failed to parse quiz JSON:', parseError);
+          setNotification('Failed to generate quiz. Please try again.');
+          setTimeout(() => setNotification(null), 3000);
+        }
+      }
+    } catch (error) {
+      console.error('Quiz generation error:', error);
+      setNotification('Failed to generate quiz. Please try again.');
+      setTimeout(() => setNotification(null), 3000);
+    } finally {
+      setIsGeneratingQuiz(false);
+    }
+  };
+
   return (
     <div 
       className={`flex-1 flex flex-col bg-chat-bg transition-all duration-500 ease-in-out h-screen ${
@@ -431,6 +608,11 @@ export const ChatArea: React.FC = () => {
                         {formatMessageTime(message.timestamp)}
                       </div>
                     </div>
+                  ) : message.type === 'quiz' ? (
+                    <QuizMessage 
+                      question={JSON.parse(message.content)} 
+                      timestamp={message.timestamp}
+                    />
                   ) : (
                     <div 
                       className="space-y-3 group relative"
@@ -496,6 +678,18 @@ export const ChatArea: React.FC = () => {
                             <Volume2 className="w-4 h-4" />
                           )}
                         </button>
+                        <button
+                          onClick={handleGenerateQuiz}
+                          disabled={isGeneratingQuiz}
+                          className={`p-2 rounded-lg hover:bg-button-secondary transition-colors duration-200 ${
+                            isGeneratingQuiz 
+                              ? 'text-purple-500 bg-purple-100 dark:bg-purple-900/20 cursor-not-allowed' 
+                              : 'text-text-muted hover:text-purple-500'
+                          }`}
+                          title={isGeneratingQuiz ? 'Generating quiz...' : 'Generate quiz from conversation'}
+                        >
+                          <Brain className={`w-4 h-4 ${isGeneratingQuiz ? 'animate-pulse' : ''}`} />
+                        </button>
                       </div>
                     </div>
                   )}
@@ -521,6 +715,8 @@ export const ChatArea: React.FC = () => {
             
             <div ref={messagesEndRef} />
           </div>
+
+
 
           {/* Input Area - Fixed at bottom */}
           <div className="flex-shrink-0 bg-chat-bg p-6">
