@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Pin, Search, Globe, X, Zap } from 'lucide-react';
+import { Waves, Paperclip, Pin, Search, Globe, Mic, X } from 'lucide-react';
 import { useChatContext, type ChatMode } from '../contexts/ChatContext';
+import { useLiveKit } from '../hooks/useLiveKit';
 
 interface ChatInputProps {
   centered?: boolean;
@@ -8,13 +9,33 @@ interface ChatInputProps {
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessageSent }) => {
-  const { state, sendMessage, setMode } = useChatContext();
+  const { state, sendMessage, setMode, toggleAurora, toggleLiveMode, addAIMessage } = useChatContext();
   const [message, setMessage] = useState('');
-  const [showModeDropdown, setShowModeDropdown] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const [showModeDropdown, setShowModeDropdown] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // LiveKit integration
+  const liveKit = useLiveKit({
+    onMessage: async (message: string) => {
+      // Handle incoming messages and generate voice responses
+      console.log('LiveKit message received:', message);
+      try {
+        // Generate voice response using the message
+        await liveKit.generateAndStreamVoiceResponse(message);
+      } catch (error) {
+        console.error('Error generating voice response:', error);
+      }
+    },
+    onStatusChange: (status: string) => {
+      console.log('LiveKit status:', status);
+    },
+    onError: (error: string) => {
+      console.error('LiveKit error:', error);
+    }
+  });
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -35,6 +56,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
     setMessage('');
     await sendMessage(messageToSend, state.currentMode);
     onMessageSent?.();
+    
+    // Refocus the input field after sending the message
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -42,6 +68,29 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
       e.preventDefault();
       handleSubmit(e);
     }
+  };
+
+  const handleWavesClick = () => {
+    if (!state.isLiveMode) {
+      // Start live mode with direct streaming connection
+      liveKit.startStreaming();
+      toggleLiveMode();
+      toggleAurora();
+    }
+    // If already in live mode, do nothing - only exit button can stop it
+  };
+
+  const handleExitLiveMode = () => {
+    // Exit live mode completely and stop aurora
+    liveKit.stopStreaming();
+    liveKit.disconnect();
+    toggleLiveMode();
+    toggleAurora();
+  };
+
+  const handleAttachment = () => {
+    // Handle file attachment
+    console.log('Attachment clicked');
   };
 
   const handleModeSelect = (mode: ChatMode) => {
@@ -71,25 +120,37 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
     return 'text-text-secondary';
   };
 
-  const getPlaceholder = () => {
-    switch (state.currentMode) {
-      case 'web':
-        return 'Search the web...';
-      case 'research':
-        return 'Research a topic...';
-      default:
-        return 'Type your message...';
-    }
-  };
-
   const ModeIcon = getModeIcon();
 
   return (
     <div className={`relative ${centered ? 'w-full max-w-4xl mx-auto' : 'w-full'}`}>
+      {/* Live Mode Status */}
+      {state.isLiveMode && (
+        <div className="mb-3 p-3 bg-surface-elevated border border-brand-primary rounded-lg">
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${
+              liveKit.state.isStreaming ? 'bg-green-500 animate-pulse' : 
+              liveKit.state.isConnected ? 'bg-blue-500' : 'bg-yellow-500'
+            }`} />
+            <span className="text-sm font-medium text-text-primary">
+              {liveKit.state.isStreaming ? '🎤 Live Connection Active' : 
+               liveKit.state.isConnected ? '🔗 Connected to LiveKit' : 
+               '⏳ Connecting...'}
+            </span>
+          </div>
+          {liveKit.state.status && (
+            <p className="text-xs text-text-muted mt-1">{liveKit.state.status}</p>
+          )}
+          {liveKit.state.error && (
+            <p className="text-xs text-red-500 mt-1">{liveKit.state.error}</p>
+          )}
+        </div>
+      )}
+      
       <form onSubmit={handleSubmit} className="relative">
         <div 
-          className={`relative flex items-center gap-3 rounded-xl shadow-md transition-all duration-300 ease-out transform ${
-            centered ? 'p-6 shadow-elevated' : 'p-4'
+          className={`relative flex items-center gap-3 rounded-3xl shadow-md transition-all duration-300 ease-out transform ${
+            centered ? 'p-4 shadow-elevated' : 'p-3'
           } ${
             isFocused
               ? 'bg-surface-elevated border-2 border-green-400 scale-[1.02] shadow-lg'
@@ -100,51 +161,64 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-          {/* Mode Selection Button */}
-          <div className="relative flex items-center" ref={dropdownRef}>
+          {/* Left Buttons */}
+          <div className="flex items-center gap-2">
+            {/* Attachment Button */}
             <button
               type="button"
-              onClick={() => setShowModeDropdown(!showModeDropdown)}
-              className={`flex-shrink-0 p-2 rounded-lg transition-all duration-300 ease-out transform hover:bg-button-secondary hover:scale-110 hover:rotate-12 active:scale-95 ${getModeColor()} self-center ${
-                showModeDropdown ? 'scale-110 bg-button-secondary' : ''
-              }`}
-              aria-label="Select mode"
+              onClick={handleAttachment}
+              className="flex-shrink-0 p-2 rounded-full transition-all duration-300 ease-out transform hover:bg-button-secondary hover:scale-110 active:scale-95 text-text-secondary hover:text-text-primary"
+              aria-label="Attach file"
             >
-              <ModeIcon className={`w-5 h-5 transition-all duration-300 ${
-                showModeDropdown ? 'rotate-180' : ''
-              }`} />
+              <Paperclip className="w-5 h-5 transition-all duration-300" />
             </button>
 
-            {/* Mode Dropdown */}
-            {showModeDropdown && (
-              <div className="absolute bottom-full left-0 mb-2 w-40 bg-surface-elevated border border-input-border rounded-lg shadow-lg overflow-hidden z-10">
-                <button
-                  type="button"
-                  onClick={() => handleModeSelect('web')}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-button-secondary transition-colors ${
-                    state.currentMode === 'web' ? 'bg-sidebar-item-active' : ''
-                  }`}
-                >
-                  <Search className="w-4 h-4 text-brand-primary" />
-                  <span className="text-sm text-text-primary">Web Search</span>
-                </button>
-                
-                <button
-                  type="button"
-                  onClick={() => handleModeSelect('research')}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-button-secondary transition-colors ${
-                    state.currentMode === 'research' ? 'bg-sidebar-item-active' : ''
-                  }`}
-                >
-                  <Globe className="w-4 h-4 text-brand-primary" />
-                  <span className="text-sm text-text-primary">Research</span>
-                </button>
-              </div>
-            )}
+            {/* Mode Selection Button */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                type="button"
+                onClick={() => setShowModeDropdown(!showModeDropdown)}
+                className={`flex-shrink-0 p-2 rounded-full transition-all duration-300 ease-out transform hover:bg-button-secondary hover:scale-110 active:scale-95 ${getModeColor()} hover:text-text-primary ${
+                  showModeDropdown ? 'scale-110 bg-button-secondary' : ''
+                }`}
+                aria-label="Select mode"
+              >
+                <ModeIcon className={`w-5 h-5 transition-all duration-300 ${
+                  showModeDropdown ? 'rotate-180' : ''
+                }`} />
+              </button>
+
+              {/* Mode Dropdown */}
+              {showModeDropdown && (
+                <div className="absolute bottom-full left-0 mb-2 w-40 bg-surface-elevated border border-input-border rounded-lg shadow-lg overflow-hidden z-10">
+                  <button
+                    type="button"
+                    onClick={() => handleModeSelect('web')}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-button-secondary transition-colors ${
+                      state.currentMode === 'web' ? 'bg-sidebar-item-active' : ''
+                    }`}
+                  >
+                    <Search className="w-4 h-4 text-brand-primary" />
+                    <span className="text-sm text-text-primary">Web Search</span>
+                  </button>
+                  
+                  <button
+                    type="button"
+                    onClick={() => handleModeSelect('research')}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-button-secondary transition-colors ${
+                      state.currentMode === 'research' ? 'bg-sidebar-item-active' : ''
+                    }`}
+                  >
+                    <Globe className="w-4 h-4 text-brand-primary" />
+                    <span className="text-sm text-text-primary">Research</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Input Field */}
-          <div className="flex-1 relative flex items-center">
+          <div className="flex-1 relative">
             <textarea
               ref={inputRef}
               value={message}
@@ -152,50 +226,48 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
               onKeyDown={handleKeyDown}
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
-              placeholder={getPlaceholder()}
-              className={`w-full bg-transparent text-text-primary placeholder:text-text-muted resize-none outline-none overflow-y-auto scrollbar-thin transition-all duration-300 ease-out flex items-center ${
-                centered ? 'min-h-[36px] max-h-48 text-lg leading-9' : 'min-h-[24px] max-h-32 leading-6'
+              placeholder="Type your message..."
+              className={`w-full bg-transparent text-text-primary placeholder:text-text-muted resize-none outline-none overflow-y-auto scrollbar-thin transition-all duration-300 ease-out ${
+                centered ? 'min-h-[36px] max-h-48 text-lg leading-relaxed py-2' : 'min-h-[24px] max-h-32 leading-6 py-1'
               } ${
                 isFocused ? 'transform scale-[1.01]' : ''
               }`}
-              rows={centered ? 2 : 1}
+              rows={1}
               disabled={state.isTyping}
-              style={{ paddingTop: centered ? '8px' : '4px', paddingBottom: centered ? '8px' : '4px' }}
             />
-            
-            {/* Clear Mode Button */}
-            {state.currentMode && (
-              <button
-                type="button"
-                onClick={() => setMode(null)}
-                className="absolute top-1 right-1 p-1 text-text-muted hover:text-text-secondary transition-all duration-200 ease-out transform hover:scale-125 hover:rotate-90 active:scale-90 rounded-full hover:bg-button-secondary"
-                aria-label="Clear mode"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            )}
           </div>
 
-          {/* Send Button */}
+          {/* Voice Button */}
           <button
-            type="submit"
-            disabled={!message.trim() || state.isTyping}
-            className={`flex-shrink-0 rounded-full flex items-center justify-center transition-all duration-300 ease-out self-center group ${
+            type="button"
+            className={`flex-shrink-0 rounded-full flex items-center justify-center transition-all duration-300 ease-out group ${
+              centered ? 'w-12 h-12' : 'w-10 h-10'
+            } bg-button-secondary hover:bg-brand-primary text-text-secondary hover:text-white shadow-md hover:shadow-xl transform hover:scale-110 active:scale-95`}
+            aria-label="Voice input"
+          >
+            <Mic className={`${centered ? 'w-5 h-5' : 'w-4 h-4'} transition-all duration-300 group-hover:scale-110`} />
+          </button>
+
+          {/* Live Mode Toggle Button */}
+          <button
+            type="button"
+            onClick={state.isLiveMode ? handleExitLiveMode : handleWavesClick}
+            className={`flex-shrink-0 rounded-full flex items-center justify-center transition-all duration-500 ease-in-out group ${
               centered ? 'w-12 h-12' : 'w-10 h-10'
             } ${
-              message.trim() && !state.isTyping
-                ? 'bg-brand-primary hover:bg-brand-primary-hover text-white shadow-md hover:shadow-xl transform hover:scale-110 hover:rotate-12 active:scale-95 active:rotate-0'
-                : 'bg-button-secondary text-text-muted cursor-not-allowed transform scale-90 opacity-60'
-            }`}
-            aria-label="Send message"
+              state.isLiveMode 
+                ? 'bg-red-500 text-white hover:bg-red-600'
+                : 'bg-button-secondary hover:bg-brand-primary text-brand-primary hover:text-white'
+            } shadow-md hover:shadow-xl transform hover:scale-110 active:scale-95`}
+            aria-label={state.isLiveMode ? "Exit Live Mode" : "Start Live Mode"}
           >
-            <Zap className={`${centered ? 'w-5 h-5' : 'w-4 h-4'} transition-all duration-300 ${
-              message.trim() && !state.isTyping ? 'group-hover:scale-110' : ''
-            }`} />
+            {state.isLiveMode ? (
+              <X className={`${centered ? 'w-5 h-5' : 'w-4 h-4'} transition-all duration-500 group-hover:scale-110`} />
+            ) : (
+              <Waves className={`${centered ? 'w-5 h-5' : 'w-4 h-4'} transition-all duration-500 group-hover:scale-110`} />
+            )}
           </button>
         </div>
-
-
       </form>
     </div>
   );
