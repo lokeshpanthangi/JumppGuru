@@ -1,10 +1,13 @@
 # app/api/genai_router.py
 import os
 import base64
+import uuid
+from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from dotenv import load_dotenv
 import google.generativeai as genai
 from app.models.genai_schema import GenAIRequest, GenAIResponse
+from app.db.mongodb import multimodal_chat_collection  # new collection import
 
 load_dotenv()
 
@@ -40,13 +43,14 @@ async def generate_tutorial(payload: GenAIRequest):
         raise HTTPException(status_code=500, detail=f"Gemini call failed: {e}")
 
     blocks = []
+    text_only_parts = []
 
     try:
         for part in result.candidates[0].content.parts:
             if hasattr(part, "text") and part.text:
                 blocks.append({"type": "text", "content": part.text})
+                text_only_parts.append(part.text)
             elif hasattr(part, "inline_data") and part.inline_data:
-                # Convert bytes to Base64 string
                 img_bytes = part.inline_data.data
                 img_b64 = base64.b64encode(img_bytes).decode("utf-8")
                 blocks.append({
@@ -54,6 +58,30 @@ async def generate_tutorial(payload: GenAIRequest):
                     "alt": "Generated illustration",
                     "data_url": f"data:image/png;base64,{img_b64}"
                 })
+
+        # Generate unique chat_id for this interaction
+        chat_id = str(uuid.uuid4())
+
+        # Save USER message
+        multimodal_chat_collection.insert_one({
+            "user_id": payload.user_id,
+            "chat_id": chat_id,
+            "timestamp": datetime.utcnow(),
+            "role": "user",
+            "text_content": payload.query,
+        })
+
+        # Save ASSISTANT message
+        multimodal_chat_collection.insert_one({
+            "user_id": payload.user_id,
+            "chat_id": chat_id,
+            "timestamp": datetime.utcnow(),
+            "role": "assistant",
+            "content": blocks,
+            "text_content": "\n".join(text_only_parts),
+            "youtube_links": [],
+            "generated_mcq_questions": []
+        })
 
         return {
             "source": "LLM+IMG",
