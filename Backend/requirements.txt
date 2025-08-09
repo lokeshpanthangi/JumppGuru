@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+openai
+redis
+python-dotenv
+httpx
+pydantic
+langdetect
+pymongo
+requests
+google-generativeai
