@@ -15,8 +15,9 @@ async def generate_mcqs_endpoint(payload: GenerateMCQRequest):
     user_id = payload.user_id
     num_q = payload.num_questions or 8
     difficulty = payload.difficulty or "medium"
+    chat_id = payload.chat_id or None
 
-    mcqs = await generate_mcqs_for_user(user_id, num_q, difficulty)
+    mcqs = await generate_mcqs_for_user(user_id, num_q, difficulty, chat_id)
     if not mcqs:
         raise HTTPException(status_code=500, detail="Failed to generate MCQs")
 

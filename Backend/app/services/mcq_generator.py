@@ -5,6 +5,7 @@ from app.services.chat_history import get_recent_messages
 from app.db.mongodb import mongo_db
 from dotenv import load_dotenv
 from typing import List
+from app.db.mongodb import multimodal_chat_collection
 
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -44,8 +45,8 @@ async def generate_mcqs_from_summary(summary: str, num_questions: int = 8, diffi
     # Defensive: ensure num_questions reasonable
     if num_questions < 1:
         num_questions = 1
-    if num_questions > 20:
-        num_questions = 20
+    if num_questions > 10:
+        num_questions = 10
 
     generation_prompt = (
         f"You are a helpful exam-question generator. Based on the following learning points:\n\n"
@@ -113,22 +114,35 @@ async def generate_mcqs_from_summary(summary: str, num_questions: int = 8, diffi
             })
     return normalized
 
-async def generate_mcqs_for_user(user_id: str, num_questions: int = 8, difficulty: str = "medium"):
-    # 1. Fetch recent 5 messages
-    history = await get_recent_messages(user_id, limit=5)
-
-    # 2. Summarize conversation to compact learning points
-    summary = await summarize_messages_for_mcq(history)
+async def generate_mcqs_for_user(user_id: str, num_questions: int = 8, difficulty: str = "medium", chat_id: str = None) -> List[dict]:
+    
+    summary = ""
+    if chat_id:
+        # Fetch the assistant's message for the given chat_id
+        doc = multimodal_chat_collection.find_one({"chat_id": chat_id, "role": "assistant"})
+        if not doc:
+            raise ValueError(f"No assistant message found for chat_id {chat_id}")
+        summary = doc["text_content"]
+    else:
+        # Original flow: summarize recent history
+        history = await get_recent_messages(user_id, limit=5)
+        summary = await summarize_messages_for_mcq(history)
 
     # 3. Generate MCQs from the summary
     mcqs = await generate_mcqs_from_summary(summary, num_questions, difficulty)
 
-    # 4. Store generated MCQs in DB (for caching)
-    if mcqs:
-        quiz_collection.update_one(
-            {"user_id": user_id},
-            {"$set": {"last_generated": mcqs, "difficulty": difficulty, "num_questions": num_questions}},
-            upsert=True
+    if chat_id:
+        result = multimodal_chat_collection.update_one(
+            {"chat_id": chat_id, "role": "user"},
+            {"$set": {"generated_mcq_questions": mcqs}}
         )
+
+    # 4. Store generated MCQs in DB (for caching)
+    # if mcqs:
+    #     quiz_collection.update_one(
+    #         {"user_id": user_id},
+    #         {"$set": {"last_generated": mcqs, "difficulty": difficulty, "num_questions": num_questions}},
+    #         upsert=True
+    #     )
 
     return mcqs

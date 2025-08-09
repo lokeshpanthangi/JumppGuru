@@ -69,6 +69,8 @@ async def generate_tutorial(payload: GenAIRequest):
             "timestamp": datetime.utcnow(),
             "role": "user",
             "text_content": payload.query,
+            "youtube_links": [],
+            "generated_mcq_questions": []
         })
 
         # Save ASSISTANT message
@@ -79,14 +81,13 @@ async def generate_tutorial(payload: GenAIRequest):
             "role": "assistant",
             "content": blocks,
             "text_content": "\n".join(text_only_parts),
-            "youtube_links": [],
-            "generated_mcq_questions": []
         })
 
         return {
             "source": "LLM+IMG",
             "language": payload.lang or "auto",
-            "blocks": blocks
+            "blocks": blocks,
+            "chat_id": chat_id,
         }
 
     except Exception as e:

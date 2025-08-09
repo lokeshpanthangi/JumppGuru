@@ -34,6 +34,7 @@ class GenerateMCQRequest(BaseModel):
     user_id: str
     num_questions: Optional[int] = 8
     difficulty: Optional[str] = "medium"  # easy | medium | hard
+    chat_id: Optional[str] = None
 
 class GenerateMCQResponse(BaseModel):
     user_id: str
