@@ -2,6 +2,7 @@
 import os
 import base64
 import uuid
+import re
 from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from dotenv import load_dotenv
@@ -51,12 +52,32 @@ async def generate_tutorial(payload: GenAIRequest):
                 blocks.append({"type": "text", "content": part.text})
                 text_only_parts.append(part.text)
             elif hasattr(part, "inline_data") and part.inline_data:
-                img_bytes = part.inline_data.data
-                img_b64 = base64.b64encode(img_bytes).decode("utf-8")
+                # Robustly build a proper data URL, handling both bytes and base64 strings
+                raw = part.inline_data.data
+                mime = getattr(part.inline_data, "mime_type", "image/png") or "image/png"
+
+                img_b64: str
+                if isinstance(raw, (bytes, bytearray)):
+                    img_b64 = base64.b64encode(raw).decode("utf-8")
+                elif isinstance(raw, str):
+                    # Strip existing data URL prefix if present
+                    m = re.match(r'^data:image/[^;]+;base64,(.*)$', raw)
+                    candidate = m.group(1) if m else raw
+                    try:
+                        # Validate base64; if valid, use as-is
+                        base64.b64decode(candidate, validate=True)
+                        img_b64 = candidate
+                    except Exception:
+                        # Fallback: encode the string bytes
+                        img_b64 = base64.b64encode(candidate.encode("utf-8")).decode("utf-8")
+                else:
+                    # Unsupported data type
+                    continue
+
                 blocks.append({
                     "type": "image",
                     "alt": "Generated illustration",
-                    "data_url": f"data:image/png;base64,{img_b64}"
+                    "data_url": f"data:{mime};base64,{img_b64}"
                 })
 
         # Generate unique chat_id for this interaction

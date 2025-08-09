@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import OpenAI from 'openai';
 
 export type Message = {
   id: string;
@@ -33,6 +32,7 @@ type ChatState = {
   currentMode: ChatMode;
   showAurora: boolean;
   isLiveMode: boolean;
+  loadingState: string | null;
 };
 
 type ChatAction =
@@ -40,6 +40,7 @@ type ChatAction =
   | { type: 'SELECT_CHAT'; chatId: string }
   | { type: 'DELETE_CHAT'; chatId: string }
   | { type: 'ADD_MESSAGE'; chatId: string; message: Message }
+  | { type: 'UPDATE_MESSAGE'; chatId: string; messageId: string; content: string }
   | { type: 'SET_THEME'; theme: Theme }
   | { type: 'TOGGLE_SIDEBAR' }
   | { type: 'SET_DASHBOARD'; show: boolean }
@@ -48,7 +49,7 @@ type ChatAction =
   | { type: 'SET_MODE'; mode: ChatMode }
   | { type: 'TOGGLE_AURORA' }
   | { type: 'TOGGLE_LIVE_MODE' }
-  | { type: 'LOAD_STATE'; state: Partial<ChatState> };
+  | { type: 'SET_LOADING_STATE'; loadingState: string | null };
 
 const initialState: ChatState = {
   chats: [],
@@ -62,6 +63,7 @@ const initialState: ChatState = {
   currentMode: null,
   showAurora: false,
   isLiveMode: false,
+  loadingState: null,
 };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -123,6 +125,40 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       };
     }
     
+    case 'UPDATE_MESSAGE': {
+      const updatedChats = state.chats.map(chat => {
+        if (chat.id === action.chatId) {
+          const updatedMessages = chat.messages.map(message => {
+            if (message.id === action.messageId) {
+              return {
+                ...message,
+                content: action.content,
+                timestamp: new Date(),
+              };
+            }
+            return message;
+          });
+          
+          return {
+            ...chat,
+            messages: updatedMessages,
+            updatedAt: new Date(),
+          };
+        }
+        return chat;
+      });
+      
+      const currentChat = state.currentChatId === action.chatId 
+        ? updatedChats.find(c => c.id === action.chatId) || null
+        : state.currentChat;
+      
+      return {
+        ...state,
+        chats: updatedChats,
+        currentChat,
+      };
+    }
+    
     case 'SET_THEME':
       return { ...state, theme: action.theme };
     
@@ -147,8 +183,8 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'TOGGLE_LIVE_MODE':
       return { ...state, isLiveMode: !state.isLiveMode };
     
-    case 'LOAD_STATE':
-      return { ...state, ...action.state };
+    case 'SET_LOADING_STATE':
+      return { ...state, loadingState: action.loadingState };
     
     default:
       return state;
@@ -170,6 +206,7 @@ type ChatContextType = {
   setMode: (mode: ChatMode) => void;
   toggleAurora: () => void;
   toggleLiveMode: () => void;
+  setLoadingState: (loadingState: string | null) => void;
 };
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -177,40 +214,10 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined);
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(chatReducer, initialState);
 
-  // Load initial state from localStorage
+  // Set theme on document when theme changes
   useEffect(() => {
-    const savedState = localStorage.getItem('jumppguru-state');
-    if (savedState) {
-      try {
-        const parsed = JSON.parse(savedState);
-        // Convert date strings back to Date objects
-        const processedState = {
-          ...parsed,
-          chats: parsed.chats?.map((chat: any) => ({
-            ...chat,
-            createdAt: new Date(chat.createdAt),
-            updatedAt: new Date(chat.updatedAt),
-            messages: chat.messages?.map((msg: any) => ({
-              ...msg,
-              timestamp: new Date(msg.timestamp),
-            })) || [],
-          })) || [],
-        };
-        dispatch({ type: 'LOAD_STATE', state: processedState });
-      } catch (error) {
-        console.error('Failed to load saved state:', error);
-      }
-    }
-    
-    // Set theme on document
     document.documentElement.classList.toggle('dark', state.theme === 'dark');
-  }, []);
-
-  // Save state to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('jumppguru-state', JSON.stringify(state));
-    document.documentElement.classList.toggle('dark', state.theme === 'dark');
-  }, [state]);
+  }, [state.theme]);
 
   const createNewChat = (): string => {
     const chatId = `chat-${Date.now()}`;
@@ -253,58 +260,155 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'ADD_MESSAGE', chatId, message: userMessage });
     dispatch({ type: 'SET_TYPING', isTyping: true });
 
+    const BACKEND_URL = 'http://localhost:8000';
+    const HARDCODED_USER_ID = 'frontend-user-12345';
+    const aiMessageId = `msg-${Date.now()}-ai`;
+
     try {
-      // Initialize OpenAI client
-      const openai = new OpenAI({
-        apiKey: import.meta.env.VITE_OPENAI_API_KEY,
-        dangerouslyAllowBrowser: true // Note: In production, use a backend proxy
-      });
-
-      // Prepare system message based on mode
-      let systemMessage = "You are JumppGuru, a helpful AI assistant.";
-      if (mode === 'web') {
-        systemMessage += " You are in web search mode. Provide comprehensive answers with web-based information.";
-      } else if (mode === 'research') {
-        systemMessage += " You are in research mode. Provide detailed, analytical responses with thorough explanations.";
-      }
-
-      // Get conversation history for context
-      const conversationHistory = state.currentChat?.messages.slice(-10) || []; // Last 10 messages for context
-      const messages = [
-        { role: 'system' as const, content: systemMessage },
-        ...conversationHistory.map(msg => ({
-          role: msg.type === 'user' ? 'user' as const : 'assistant' as const,
-          content: msg.content
-        })),
-        { role: 'user' as const, content: content.trim() }
+      // Sequential loading states with 3-second intervals
+      const loadingStates = [
+        'Generating content...',
+        'Generating images...',
+        'Finding related videos...'
       ];
 
-      // Call OpenAI API
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
-        messages: messages,
-        max_tokens: 1000,
-        temperature: 0.7,
+      // Show loading states sequentially
+      for (let i = 0; i < loadingStates.length; i++) {
+        dispatch({ type: 'SET_LOADING_STATE', loadingState: loadingStates[i] });
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+
+      // Start both API calls in parallel
+      const genaiPromise = fetch(`${BACKEND_URL}/genai/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: HARDCODED_USER_ID,
+          query: content.trim(),
+          lang: 'auto',
+          max_images: 3
+        })
+      }).then(res => {
+        if (!res.ok) throw new Error(`GenAI API failed: ${res.status}`);
+        return res.json();
       });
 
-      const aiResponse = completion.choices[0]?.message?.content || 'Sorry, I could not generate a response.';
-      const modePrefix = mode === 'web' ? '[Web Search] ' : mode === 'research' ? '[Research] ' : '';
+      const youtubePromise = fetch(`${BACKEND_URL}/youtube/recommend?q=${encodeURIComponent(content.trim())}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      }).then(res => {
+        if (!res.ok) throw new Error(`YouTube API failed: ${res.status}`);
+        return res.json();
+      });
+
+      // Wait for GenAI response first
+      const genaiResponse = await genaiPromise.catch(error => ({ error }));
       
-      const aiMessage: Message = {
-        id: `msg-${Date.now()}-ai`,
-        content: modePrefix + aiResponse,
+      // Process and display GenAI content immediately
+      let genaiContent = '';
+      if (genaiResponse.error) {
+        console.error('GenAI API Error:', genaiResponse.error);
+        genaiContent = '⚠️ Tutorial content temporarily unavailable.';
+      } else if (genaiResponse.blocks && Array.isArray(genaiResponse.blocks)) {
+        genaiContent = genaiResponse.blocks.map((block: any) => {
+          if (block.type === 'text') {
+            return block.content;
+          } else if (block.type === 'image') {
+            const alt = block.alt || 'Generated illustration';
+
+            // Support multiple possible fields for image data
+            const possibleSrc = block.data_url || block.url || block.src || block.base64 || block.data;
+
+            // If there is an array of images, render them all
+            if (Array.isArray(block.images) && block.images.length > 0) {
+              const imagesMarkdown = block.images.map((img: any) => {
+                let src: string | undefined = img?.data_url || img?.url || img?.src || img?.base64 || img?.data;
+                if (!src) return '';
+                // Normalize to data URL if needed
+                if (!/^https?:\/\//.test(src) && !src.startsWith('data:image/')) {
+                  // remove any existing prefix and whitespace/newlines in base64 payload
+                  const cleaned = String(src)
+                    .replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, '')
+                    .replace(/\s+/g, '');
+                  src = `data:image/png;base64,${cleaned}`;
+                } else if (src.startsWith('data:image/')) {
+                  // Ensure no whitespace/newlines within data URL
+                  const [prefix, payload] = src.split(',');
+                  src = `${prefix},${(payload || '').replace(/\s+/g, '')}`;
+                }
+                return `![${alt}](${src})`;
+              }).filter(Boolean).join('\n\n');
+              return imagesMarkdown;
+            }
+
+            if (possibleSrc) {
+              let src: string = String(possibleSrc);
+              // Normalize to data URL if needed
+              if (!/^https?:\/\//.test(src) && !src.startsWith('data:image/')) {
+                // remove any existing prefix and whitespace/newlines in base64 payload
+                const cleaned = src
+                  .replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, '')
+                  .replace(/\s+/g, '');
+                src = `data:image/png;base64,${cleaned}`;
+              } else if (src.startsWith('data:image/')) {
+                // Ensure no whitespace/newlines within data URL
+                const [prefix, payload] = src.split(',');
+                src = `${prefix},${(payload || '').replace(/\s+/g, '')}`;
+              }
+              return `![${alt}](${src})`;
+            }
+            return '';
+          }
+          return '';
+        }).join('\n\n');
+      }
+
+      // Add GenAI message first
+      const genaiMessage: Message = {
+        id: aiMessageId,
+        content: genaiContent,
         type: 'ai',
         timestamp: new Date(),
       };
+      dispatch({ type: 'ADD_MESSAGE', chatId, message: genaiMessage });
 
-      dispatch({ type: 'ADD_MESSAGE', chatId, message: aiMessage });
-    } catch (error) {
-      console.error('OpenAI API Error:', error);
+      // Wait for YouTube response and update the existing message
+      const youtubeResponse = await youtubePromise.catch(error => ({ error }));
       
-      // Fallback response in case of API error
+      let youtubeContent = '';
+      if (youtubeResponse.error) {
+        console.error('YouTube API Error:', youtubeResponse.error);
+        youtubeContent = '\n\n## 📺 Related Videos\n\n⚠️ Video recommendations temporarily unavailable.';
+      } else if (youtubeResponse.videos && Array.isArray(youtubeResponse.videos)) {
+        // Show only first 3 videos by default
+        const limitedVideos = youtubeResponse.videos.slice(0, 3);
+        const remainingVideos = youtubeResponse.videos.slice(3);
+        
+        youtubeContent = `\n\n<youtube-cards>${JSON.stringify({
+          videos: limitedVideos,
+          remainingVideos: remainingVideos
+        })}</youtube-cards>`;
+      }
+
+      // Update the existing message with YouTube content (no duplicate message)
+      dispatch({ 
+        type: 'UPDATE_MESSAGE', 
+        chatId, 
+        messageId: aiMessageId,
+        content: genaiContent + youtubeContent
+      });
+
+    } catch (error) {
+      console.error('Backend API Error:', error);
+      
+      // Fallback response in case of complete failure
       const errorMessage: Message = {
         id: `msg-${Date.now()}-ai`,
-        content: 'Sorry, I encountered an error while processing your request. Please check your API key configuration and try again.',
+        content: 'Sorry, I encountered an error while processing your request. Please make sure the backend server is running on localhost:8000.',
         type: 'ai',
         timestamp: new Date(),
       };
@@ -312,6 +416,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       dispatch({ type: 'ADD_MESSAGE', chatId, message: errorMessage });
     } finally {
       dispatch({ type: 'SET_TYPING', isTyping: false });
+      dispatch({ type: 'SET_LOADING_STATE', loadingState: null });
     }
   };
 
@@ -341,6 +446,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const toggleLiveMode = () => {
     dispatch({ type: 'TOGGLE_LIVE_MODE' });
+  };
+
+  const setLoadingState = (loadingState: string | null) => {
+    dispatch({ type: 'SET_LOADING_STATE', loadingState });
   };
 
   const addAIMessage = (content: string) => {
@@ -390,6 +499,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setMode,
     toggleAurora,
     toggleLiveMode,
+    setLoadingState,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

@@ -3,6 +3,7 @@ import { Search, Globe, Copy, ThumbsUp, ThumbsDown, Volume2, VolumeX, Brain } fr
 import { useChatContext } from '../contexts/ChatContext';
 import { ChatInput } from './ChatInput';
 import { TypingAnimation } from './ui/typing-animation';
+import { LoadingState } from './ui/LoadingState';
 import { MarkdownRenderer } from './ui/MarkdownRenderer';
 import { Renderer, Program, Mesh, Color, Triangle } from 'ogl';
 
@@ -702,7 +703,7 @@ Recent conversation:\n${chatHistory}`;
               </div>
             ))}
             
-            {state.isTyping && (
+            {(state.isTyping || state.loadingState) && (
               <div className="flex justify-start">
                 <div className="bg-transparent text-text-primary max-w-[80%]">
                   <div className="flex items-center gap-3 mb-3">
@@ -712,7 +713,11 @@ Recent conversation:\n${chatHistory}`;
                     <span className="font-medium text-text-primary">JumppGuru</span>
                   </div>
                   <div className="prose max-w-none">
-                    <TypingAnimation className="text-base" />
+                    {state.loadingState ? (
+                      <LoadingState message={state.loadingState} />
+                    ) : (
+                      <TypingAnimation className="text-base" />
+                    )}
                   </div>
                 </div>
               </div>
