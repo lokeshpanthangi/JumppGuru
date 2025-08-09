@@ -8,3 +8,4 @@ pydantic
 langdetect
 pymongo
 requests
+google-generativeai
