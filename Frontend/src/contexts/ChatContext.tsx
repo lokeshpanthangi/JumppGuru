@@ -14,6 +14,7 @@ export type Chat = {
   messages: Message[];
   createdAt: Date;
   updatedAt: Date;
+  backendChatId?: string;
 };
 
 export type ChatMode = 'web' | 'research' | null;
@@ -41,6 +42,7 @@ type ChatAction =
   | { type: 'DELETE_CHAT'; chatId: string }
   | { type: 'ADD_MESSAGE'; chatId: string; message: Message }
   | { type: 'UPDATE_MESSAGE'; chatId: string; messageId: string; content: string }
+  | { type: 'SET_BACKEND_CHAT_ID'; chatId: string; backendChatId: string }
   | { type: 'SET_THEME'; theme: Theme }
   | { type: 'TOGGLE_SIDEBAR' }
   | { type: 'SET_DASHBOARD'; show: boolean }
@@ -159,6 +161,28 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       };
     }
     
+    case 'SET_BACKEND_CHAT_ID': {
+      const updatedChats = state.chats.map(chat => {
+        if (chat.id === action.chatId) {
+          return {
+            ...chat,
+            backendChatId: action.backendChatId,
+          };
+        }
+        return chat;
+      });
+      
+      const currentChat = state.currentChatId === action.chatId 
+        ? updatedChats.find(c => c.id === action.chatId) || null
+        : state.currentChat;
+      
+      return {
+        ...state,
+        chats: updatedChats,
+        currentChat,
+      };
+    }
+    
     case 'SET_THEME':
       return { ...state, theme: action.theme };
     
@@ -199,6 +223,7 @@ type ChatContextType = {
   sendMessage: (content: string, mode?: ChatMode) => Promise<void>;
   addAIMessage: (content: string) => void;
   addQuizMessage: (content: string) => void;
+  setBackendChatId: (chatId: string, backendChatId: string) => void;
   setTheme: (theme: Theme) => void;
   toggleSidebar: () => void;
   setDashboard: (show: boolean) => void;
@@ -207,7 +232,7 @@ type ChatContextType = {
   toggleAurora: () => void;
   toggleLiveMode: () => void;
   setLoadingState: (loadingState: string | null) => void;
-};
+}
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
@@ -260,7 +285,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'ADD_MESSAGE', chatId, message: userMessage });
     dispatch({ type: 'SET_TYPING', isTyping: true });
 
-    const BACKEND_URL = 'http://localhost:8000';
+    const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
     const HARDCODED_USER_ID = 'frontend-user-12345';
     const aiMessageId = `msg-${Date.now()}-ai`;
 
@@ -307,6 +332,19 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
       // Wait for GenAI response first
       const genaiResponse = await genaiPromise.catch(error => ({ error }));
+      console.log('🔍 Full GenAI Response:', genaiResponse);
+      
+      // Extract chat_id from GenAI response
+      let backendChatId = null;
+      if (genaiResponse && genaiResponse.chat_id) {
+        backendChatId = genaiResponse.chat_id;
+        console.log('✅ Backend chat_id extracted:', backendChatId);
+        // Store the backend chat_id in the current chat
+        dispatch({ type: 'SET_BACKEND_CHAT_ID', chatId, backendChatId });
+      } else {
+        console.log('❌ No chat_id found in GenAI response');
+        console.log('GenAI response keys:', Object.keys(genaiResponse || {}));
+      }
       
       // Process and display GenAI content immediately using fast block rendering
       let genaiContent = '';
@@ -329,6 +367,44 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
       // Wait for YouTube response and update the existing message
       const youtubeResponse = await youtubePromise.catch(error => ({ error }));
+      console.log('🎥 Full YouTube Response:', youtubeResponse);
+      
+      // Call YouTube update API if we have both chat_id and YouTube videos
+      console.log('🔄 Checking conditions for update API call:');
+      console.log('- backendChatId:', backendChatId);
+      console.log('- youtubeResponse.videos exists:', !!youtubeResponse.videos);
+      console.log('- youtubeResponse.videos is array:', Array.isArray(youtubeResponse.videos));
+      
+      console.log('🚀 Calling YouTube update API1...',backendChatId,youtubeResponse);
+      if (backendChatId && youtubeResponse.videos && Array.isArray(youtubeResponse.videos)) {
+        console.log('🚀 Calling YouTube update API2...');
+        try {
+          const updateResponse = await fetch(`${BACKEND_URL}/youtube/update_youtube_links`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              chat_id: backendChatId,
+              videos: youtubeResponse.videos
+            })
+          });
+          
+          console.log('📡 Update API Response Status:', updateResponse.status);
+          const responseData = await updateResponse.json();
+          console.log('📡 Update API Response Data:', responseData);
+          
+          if (updateResponse.ok) {
+            console.log('✅ YouTube links successfully stored in database');
+          } else {
+            console.error('❌ Failed to update YouTube links:', updateResponse.status);
+          }
+        } catch (error) {
+          console.error('💥 Error calling YouTube update API:', error);
+        }
+      } else {
+        console.log('⚠️ Skipping update API call - conditions not met');
+      }
       
       let youtubeContent = '';
       if (youtubeResponse.error) {
@@ -359,7 +435,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       // Fallback response in case of complete failure
       const errorMessage: Message = {
         id: `msg-${Date.now()}-ai`,
-        content: 'Sorry, I encountered an error while processing your request. Please make sure the backend server is running on localhost:8000.',
+        content: 'Sorry, I encountered an error while processing your request. Please make sure the backend server is running on.',
         type: 'ai',
         timestamp: new Date(),
       };
@@ -435,6 +511,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'ADD_MESSAGE', chatId, message: quizMessage });
   };
 
+  const setBackendChatId = (chatId: string, backendChatId: string) => {
+    dispatch({ type: 'SET_BACKEND_CHAT_ID', chatId, backendChatId });
+  };
+
   const value: ChatContextType = {
     state,
     createNewChat,
@@ -443,6 +523,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     sendMessage,
     addAIMessage,
     addQuizMessage,
+    setBackendChatId,
     setTheme,
     toggleSidebar,
     setDashboard,

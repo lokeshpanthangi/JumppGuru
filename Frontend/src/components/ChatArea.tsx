@@ -6,6 +6,7 @@ import { TypingAnimation } from './ui/typing-animation';
 import { LoadingState } from './ui/LoadingState';
 import { MarkdownRenderer } from './ui/MarkdownRenderer';
 import { FastBlockRenderer } from './ui/FastBlockRenderer';
+import { QuizModal } from './ui/QuizModal';
 import { Renderer, Program, Mesh, Color, Triangle } from 'ogl';
 
 const VERT = `#version 300 es
@@ -343,8 +344,8 @@ export const ChatArea: React.FC = () => {
   const [likedMessages, setLikedMessages] = useState<Set<string>>(new Set());
   const [dislikedMessages, setDislikedMessages] = useState<Set<string>>(new Set());
   const [playingVoice, setPlayingVoice] = useState<string | null>(null);
-
   const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
+  const [isQuizModalOpen, setIsQuizModalOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -443,102 +444,95 @@ export const ChatArea: React.FC = () => {
     }
   };
 
-  const handleGenerateQuiz = async () => {
-    if (!state.currentChat?.messages.length) return;
+  const handleOpenQuizModal = () => {
+    if (!state.currentChat?.messages.length) {
+      setNotification('No conversation found to generate quiz from');
+      setTimeout(() => setNotification(null), 3000);
+      return;
+    }
+    
+    // Check if we have a backend chat ID
+    if (!state.currentChat?.backendChatId) {
+      setNotification('Please send a message first to start a conversation');
+      setTimeout(() => setNotification(null), 3000);
+      return;
+    }
+    
+    setIsQuizModalOpen(true);
+  };
+
+  const handleGenerateQuiz = async (difficulty: string, numQuestions: number) => {
+    if (!state.currentChat?.backendChatId) {
+      setNotification('No chat ID found. Please send a message first.');
+      setTimeout(() => setNotification(null), 3000);
+      return;
+    }
     
     setIsGeneratingQuiz(true);
     try {
-      // Get only the last 5 messages from current chat
-      const recentMessages = state.currentChat.messages.slice(-5);
-      const chatHistory = recentMessages
-        .map(msg => `${msg.type === 'user' ? 'User' : 'Assistant'}: ${msg.content}`)
-        .join('\n\n');
+      const HARDCODED_USER_ID = 'frontend-user-12345';
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
       
-      // Generate random number of questions (3-7)
-      const numQuestions = Math.floor(Math.random() * 5) + 3;
+      const requestBody = {
+        user_id: HARDCODED_USER_ID,
+        num_questions: numQuestions,
+        difficulty: difficulty,
+        chat_id: state.currentChat.backendChatId
+      };
       
-      const quizPrompt = `Based on the following recent conversation, generate exactly ${numQuestions} multiple choice quiz questions to test understanding of the topics discussed. Each question should have 4 options (A, B, C, D) with only one correct answer. 
-
-IMPORTANT: Respond with ONLY a valid JSON array, no markdown formatting or code blocks. Use this exact structure:
-
-[
-  {
-    "question": "Question text here?",
-    "options": {
-      "A": "Option A text",
-      "B": "Option B text", 
-      "C": "Option C text",
-      "D": "Option D text"
-    },
-    "correct": "A",
-    "explanation": "Brief explanation of why this is correct"
-  }
-]
-
-Recent conversation:\n${chatHistory}`;
+      console.log('Sending quiz request:', requestBody);
       
-      // Use the existing OpenAI setup from ChatContext
-      const OpenAI = (await import('openai')).default;
-      const openai = new OpenAI({
-        apiKey: import.meta.env.VITE_OPENAI_API_KEY,
-        dangerouslyAllowBrowser: true
+      const response = await fetch(`${backendUrl}/generate_mcqs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
       });
       
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
-        messages: [{ role: 'user', content: quizPrompt }],
-        max_tokens: 2000,
-        temperature: 0.7,
-      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
       
-      const response = completion.choices[0]?.message?.content;
-      if (response) {
-        try {
-          // Clean the response to extract JSON from markdown code blocks if present
-          let cleanedResponse = response.trim();
-          
-          // Remove markdown code block formatting if present
-          if (cleanedResponse.startsWith('```json')) {
-            cleanedResponse = cleanedResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-          } else if (cleanedResponse.startsWith('```')) {
-            cleanedResponse = cleanedResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
-          }
-          
-          const questions = JSON.parse(cleanedResponse);
-          
-          // Add quiz header message first
-          const quizHeader = {
-            type: 'quiz-header',
-            content: `Quiz Time! 🧠 (${questions.length} questions)`,
-            timestamp: new Date()
-          };
-          addAIMessage(`🧠 **Quiz Time!** I've generated ${questions.length} questions based on our conversation. Test your knowledge!`);
-          
-          // Add quiz questions as chat messages
-          questions.forEach((question: any, index: number) => {
-            // Clean and validate the question data
-            const cleanedQuestion = {
-              ...question,
-              correct: question.correct?.trim?.() || question.correct
-            };
-            console.log('Adding quiz question:', cleanedQuestion);
-            addQuizMessage(JSON.stringify(cleanedQuestion));
-          });
-          
-        } catch (parseError) {
-          console.error('Failed to parse quiz JSON:', parseError);
-          setNotification('Failed to generate quiz. Please try again.');
-          setTimeout(() => setNotification(null), 3000);
-        }
+      const data = await response.json();
+      console.log('Quiz response:', data);
+      
+      if (data.mcqs && Array.isArray(data.mcqs)) {
+        // Convert backend MCQ format to frontend quiz format
+        const quizQuestions = data.mcqs.map((mcq: any) => ({
+          question: mcq.question,
+          options: mcq.options,
+          correct: mcq.correct_answer,
+          explanation: mcq.explanation || 'No explanation provided'
+        }));
+        
+        // Add each quiz question as a separate message
+        quizQuestions.forEach((quiz: any) => {
+          addQuizMessage(JSON.stringify(quiz));
+        });
+        
+        setNotification(`Generated ${quizQuestions.length} quiz questions!`);
+        setTimeout(() => setNotification(null), 3000);
+      } else {
+        throw new Error('Invalid response format from server');
       }
     } catch (error) {
-      console.error('Quiz generation error:', error);
+      console.error('Error generating quiz:', error);
       setNotification('Failed to generate quiz. Please try again.');
       setTimeout(() => setNotification(null), 3000);
     } finally {
       setIsGeneratingQuiz(false);
+      setIsQuizModalOpen(false);
     }
   };
+
+  const handleCloseQuizModal = () => {
+    if (!isGeneratingQuiz) {
+      setIsQuizModalOpen(false);
+    }
+  };
+
+
 
   return (
     <div 
@@ -690,7 +684,7 @@ Recent conversation:\n${chatHistory}`;
                           )}
                         </button>
                         <button
-                          onClick={handleGenerateQuiz}
+                          onClick={handleOpenQuizModal}
                           disabled={isGeneratingQuiz}
                           className={`p-2 rounded-lg hover:bg-button-secondary transition-colors duration-200 ${
                             isGeneratingQuiz 
@@ -741,6 +735,14 @@ Recent conversation:\n${chatHistory}`;
           </div>
         </div>
       )}
+      
+      {/* Quiz Modal */}
+      <QuizModal
+        isOpen={isQuizModalOpen}
+        onClose={handleCloseQuizModal}
+        onGenerate={handleGenerateQuiz}
+        isGenerating={isGeneratingQuiz}
+      />
     </div>
   );
 };
