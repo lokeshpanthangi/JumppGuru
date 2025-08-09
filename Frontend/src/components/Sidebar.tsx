@@ -167,14 +167,14 @@ export const Sidebar: React.FC = () => {
                 onClick={handleNewChat}
                 className={`w-full flex items-center transition-all duration-sidebar ease-sidebar ${state.sidebarCollapsed ? 'justify-center px-2 py-3' : 'gap-3 px-4 py-3'} rounded-lg ${
                   !state.showDashboard && !state.currentChatId
-                    ? 'bg-[hsl(var(--input-mint-bg))] border border-[hsl(var(--input-mint-border))] shadow-[0_0_8px_hsl(var(--input-mint-glow))] text-brand-primary'
-                    : 'bg-brand-primary hover:bg-brand-primary-hover text-white'
+                    ? 'bg-brand-primary hover:bg-brand-primary-hover text-[hsl(var(--button-secondary))]'
+                    : 'bg-brand-primary hover:bg-brand-primary-hover text-[hsl(var(--button-secondary))]'
                 }`}
                 title={state.sidebarCollapsed ? 'New Chat' : ''}
               >
                 <MessageSquarePlus className="w-5 h-5" />
                 {!state.sidebarCollapsed && (
-                  <span className="font-medium">New Chat</span>
+                  <span className="font-medium">New Chattt</span>
                 )}
               </button>
             </div>

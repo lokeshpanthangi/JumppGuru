@@ -5,6 +5,7 @@ import { ChatInput } from './ChatInput';
 import { TypingAnimation } from './ui/typing-animation';
 import { LoadingState } from './ui/LoadingState';
 import { MarkdownRenderer } from './ui/MarkdownRenderer';
+import { FastBlockRenderer } from './ui/FastBlockRenderer';
 import { Renderer, Program, Mesh, Color, Triangle } from 'ogl';
 
 const VERT = `#version 300 es
@@ -580,12 +581,12 @@ Recent conversation:\n${chatHistory}`;
           </div>
         </div>
       ) : (
-        /* Active Chat */
-        <div className="flex-1 flex flex-col h-full">
-          {/* Messages Container */}
+        /* Active Chat - Full Screen */
+        <div className="flex-1 flex flex-col h-full relative">
+          {/* Messages Container - Full Screen */}
           <div 
             ref={chatContainerRef}
-            className="flex-1 overflow-y-auto scrollbar-thin p-6 space-y-6 min-h-0"
+            className="flex-1 overflow-y-auto scrollbar-thin p-6 pb-32 space-y-6 min-h-0"
           >
             {state.currentChat?.messages.map((message) => (
               <div
@@ -635,7 +636,11 @@ Recent conversation:\n${chatHistory}`;
                         </span>
                       </div>
                       <div className="prose max-w-none">
-                        <MarkdownRenderer content={message.content} />
+                        {message.content.includes('<BLOCKS_DATA>') ? (
+                          <FastBlockRenderer content={message.content} />
+                        ) : (
+                          <MarkdownRenderer content={message.content} />
+                        )}
                       </div>
                       
                       {/* Action Buttons - Always reserve space but only visible on hover */}
@@ -728,9 +733,11 @@ Recent conversation:\n${chatHistory}`;
 
 
 
-          {/* Input Area - Fixed at bottom */}
-          <div className="flex-shrink-0 bg-chat-bg p-6">
-            <ChatInput onMessageSent={handleMessageSent} />
+          {/* Input Area - Floating Overlay */}
+          <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-chat-bg via-chat-bg/95 to-transparent pointer-events-none">
+            <div className="pointer-events-auto">
+              <ChatInput onMessageSent={handleMessageSent} />
+            </div>
           </div>
         </div>
       )}

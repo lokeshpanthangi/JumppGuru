@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Play, Eye, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
+import { YouTubeModal } from './YouTubeModal';
 
 interface YouTubeVideo {
   title: string;
@@ -17,6 +18,8 @@ interface YouTubeCardsProps {
 
 export const YouTubeCards: React.FC<YouTubeCardsProps> = ({ videos, remainingVideos = [] }) => {
   const [showMore, setShowMore] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedVideo, setSelectedVideo] = useState<YouTubeVideo | null>(null);
   
   if (!videos || videos.length === 0) {
     return (
@@ -26,21 +29,28 @@ export const YouTubeCards: React.FC<YouTubeCardsProps> = ({ videos, remainingVid
     );
   }
 
-  const handleVideoClick = (link: string) => {
-    window.open(link, '_blank', 'noopener,noreferrer');
+  const handleVideoClick = (video: YouTubeVideo) => {
+    setSelectedVideo(video);
+    setModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setSelectedVideo(null);
   };
 
   const displayedVideos = showMore ? [...videos, ...remainingVideos] : videos;
   const hasMoreVideos = remainingVideos.length > 0;
 
   return (
-    <div className="w-full">
+    <>
+      <div className="w-full">
         <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin">
           {displayedVideos.map((video, index) => (
           <div
             key={index}
             className="flex-shrink-0 w-80 bg-surface-elevated border border-input-border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer group"
-            onClick={() => handleVideoClick(video.link)}
+            onClick={() => handleVideoClick(video)}
           >
             {/* Thumbnail */}
             <div className="relative aspect-video bg-gray-200">
@@ -119,6 +129,15 @@ export const YouTubeCards: React.FC<YouTubeCardsProps> = ({ videos, remainingVid
           </div>
         )}
       </div>
+      
+      {/* YouTube Modal */}
+      <YouTubeModal
+        isOpen={modalOpen}
+        onClose={closeModal}
+        videoUrl={selectedVideo?.link || ''}
+        title={selectedVideo?.title || ''}
+      />
+    </>
   );
 };
 

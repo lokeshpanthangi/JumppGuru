@@ -15,11 +15,7 @@ const ImageRenderer: React.FC<ImageRendererProps> = ({ src, alt, title }) => {
   const [processedSrc, setProcessedSrc] = useState<string>('');
 
   useEffect(() => {
-    // Debug logging to understand what we're receiving
-    console.log('🖼️ ImageRenderer received:', { src, alt, title });
-    
     if (!src) {
-      console.log('❌ No src provided to ImageRenderer');
       setImageState('error');
       setProcessedSrc('');
       return;
@@ -32,40 +28,24 @@ const ImageRenderer: React.FC<ImageRendererProps> = ({ src, alt, title }) => {
     if (src.startsWith('http://') || src.startsWith('https://')) {
       // Regular URL - use as is
       finalSrc = src;
-      console.log('🌐 Detected HTTP/HTTPS URL:', finalSrc);
     } else if (src.startsWith('data:image/')) {
       // Already a proper data URL - use as is
       finalSrc = src;
-      console.log('📷 Detected data URL:', finalSrc.substring(0, 50) + '...');
     } else {
       // Assume it's base64 data without prefix
       const base64Data = src.replace(/^data:image\/[a-z]+;base64,/, '');
       finalSrc = `data:image/png;base64,${base64Data}`;
-      console.log('🔧 Processed base64 data:', {
-        originalLength: src.length,
-        processedLength: finalSrc.length,
-        preview: finalSrc.substring(0, 50) + '...'
-      });
     }
 
-    console.log('✅ Final processed src:', finalSrc.substring(0, 100) + '...');
     setProcessedSrc(finalSrc);
     setImageState('loading');
   }, [src]);
 
   const handleImageLoad = () => {
-    console.log('🎉 Image loaded successfully!', processedSrc.substring(0, 50) + '...');
     setImageState('loaded');
   };
 
   const handleImageError = (e: any) => {
-    console.error('💥 Failed to load image:', { 
-      originalSrc: src, 
-      processedSrc: processedSrc.substring(0, 100) + '...', 
-      error: e,
-      errorType: e.type,
-      target: e.target
-    });
     setImageState('error');
   };
 
@@ -79,13 +59,6 @@ const ImageRenderer: React.FC<ImageRendererProps> = ({ src, alt, title }) => {
 
   return (
     <div className="my-6 flex flex-col items-center space-y-3">
-      {/* Debug info */}
-      <div className="text-xs text-gray-500 bg-gray-100 dark:bg-gray-800 p-2 rounded max-w-md overflow-hidden">
-        <div>State: {imageState}</div>
-        <div>Src: {src ? src.substring(0, 50) + '...' : 'None'}</div>
-        <div>Processed: {processedSrc ? processedSrc.substring(0, 50) + '...' : 'None'}</div>
-      </div>
-      
       <div className="relative max-w-full">
         {imageState === 'loading' && (
           <div className="flex items-center justify-center w-64 h-32 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
@@ -135,11 +108,7 @@ const ImageRenderer: React.FC<ImageRendererProps> = ({ src, alt, title }) => {
         </div>
       )}
       
-      {imageState === 'loaded' && (
-        <div className="text-xs text-gray-400 dark:text-gray-500">
-          🖼️ Image loaded successfully
-        </div>
-      )}
+
     </div>
   );
 };
@@ -185,32 +154,53 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
               </p>
             );
           },
-          // Custom heading renderers
+          // Custom heading renderers with enhanced styling
           h1({ children }) {
             return (
-              <h1 className="text-2xl font-bold text-text-primary mb-4 mt-6 first:mt-0">
+              <h1 className="text-3xl font-bold text-text-primary mb-6 mt-8 first:mt-0 border-b border-gray-200 dark:border-gray-700 pb-2">
                 {children}
               </h1>
             );
           },
           h2({ children }) {
             return (
-              <h2 className="text-xl font-semibold text-text-primary mb-3 mt-5 first:mt-0">
+              <h2 className="text-2xl font-semibold text-text-primary mb-4 mt-6 first:mt-0">
                 {children}
               </h2>
             );
           },
           h3({ children }) {
             return (
-              <h3 className="text-lg font-medium text-text-primary mb-2 mt-4 first:mt-0">
+              <h3 className="text-xl font-medium text-text-primary mb-3 mt-5 first:mt-0">
                 {children}
               </h3>
             );
           },
-          // Custom list renderers
+          h4({ children }) {
+            return (
+              <h4 className="text-lg font-medium text-text-primary mb-2 mt-4 first:mt-0">
+                {children}
+              </h4>
+            );
+          },
+          h5({ children }) {
+            return (
+              <h5 className="text-base font-medium text-text-primary mb-2 mt-3 first:mt-0">
+                {children}
+              </h5>
+            );
+          },
+          h6({ children }) {
+            return (
+              <h6 className="text-sm font-medium text-text-primary mb-2 mt-3 first:mt-0">
+                {children}
+              </h6>
+            );
+          },
+          // Custom list renderers with inline formatting
           ul({ children }) {
             return (
-              <ul className="list-disc list-inside text-text-primary mb-4 space-y-1">
+              <ul className="list-disc text-text-primary mb-4" style={{ listStylePosition: 'inside', paddingLeft: 0, marginLeft: 0 }}>
                 {children}
               </ul>
             );
@@ -218,10 +208,12 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
           ol({ children, start }) {
             return (
               <ol 
-                className="text-text-primary mb-4 space-y-1 pl-6" 
+                className="text-text-primary mb-4" 
                 style={{ 
                   listStyleType: 'decimal',
-                  listStylePosition: 'outside'
+                  listStylePosition: 'inside',
+                  paddingLeft: 0,
+                  marginLeft: 0
                 }}
                 start={start}
               >
@@ -231,7 +223,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
           },
           li({ children }) {
             return (
-              <li className="text-text-primary">
+              <li className="text-text-primary leading-relaxed mb-2" style={{ marginLeft: 0, paddingLeft: 0, display: 'list-item' }}>
                 {children}
               </li>
             );

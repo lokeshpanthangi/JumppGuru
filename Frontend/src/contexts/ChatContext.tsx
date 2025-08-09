@@ -223,7 +223,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     const chatId = `chat-${Date.now()}`;
     const newChat: Chat = {
       id: chatId,
-      title: 'New Chat',
+      title: 'New Chatt',
       messages: [],
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -308,63 +308,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       // Wait for GenAI response first
       const genaiResponse = await genaiPromise.catch(error => ({ error }));
       
-      // Process and display GenAI content immediately
+      // Process and display GenAI content immediately using fast block rendering
       let genaiContent = '';
       if (genaiResponse.error) {
         console.error('GenAI API Error:', genaiResponse.error);
         genaiContent = '⚠️ Tutorial content temporarily unavailable.';
       } else if (genaiResponse.blocks && Array.isArray(genaiResponse.blocks)) {
-        genaiContent = genaiResponse.blocks.map((block: any) => {
-          if (block.type === 'text') {
-            return block.content;
-          } else if (block.type === 'image') {
-            const alt = block.alt || 'Generated illustration';
-
-            // Support multiple possible fields for image data
-            const possibleSrc = block.data_url || block.url || block.src || block.base64 || block.data;
-
-            // If there is an array of images, render them all
-            if (Array.isArray(block.images) && block.images.length > 0) {
-              const imagesMarkdown = block.images.map((img: any) => {
-                let src: string | undefined = img?.data_url || img?.url || img?.src || img?.base64 || img?.data;
-                if (!src) return '';
-                // Normalize to data URL if needed
-                if (!/^https?:\/\//.test(src) && !src.startsWith('data:image/')) {
-                  // remove any existing prefix and whitespace/newlines in base64 payload
-                  const cleaned = String(src)
-                    .replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, '')
-                    .replace(/\s+/g, '');
-                  src = `data:image/png;base64,${cleaned}`;
-                } else if (src.startsWith('data:image/')) {
-                  // Ensure no whitespace/newlines within data URL
-                  const [prefix, payload] = src.split(',');
-                  src = `${prefix},${(payload || '').replace(/\s+/g, '')}`;
-                }
-                return `![${alt}](${src})`;
-              }).filter(Boolean).join('\n\n');
-              return imagesMarkdown;
-            }
-
-            if (possibleSrc) {
-              let src: string = String(possibleSrc);
-              // Normalize to data URL if needed
-              if (!/^https?:\/\//.test(src) && !src.startsWith('data:image/')) {
-                // remove any existing prefix and whitespace/newlines in base64 payload
-                const cleaned = src
-                  .replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, '')
-                  .replace(/\s+/g, '');
-                src = `data:image/png;base64,${cleaned}`;
-              } else if (src.startsWith('data:image/')) {
-                // Ensure no whitespace/newlines within data URL
-                const [prefix, payload] = src.split(',');
-                src = `${prefix},${(payload || '').replace(/\s+/g, '')}`;
-              }
-              return `![${alt}](${src})`;
-            }
-            return '';
-          }
-          return '';
-        }).join('\n\n');
+        // Store blocks as JSON for fast rendering instead of converting to markdown
+        genaiContent = `<BLOCKS_DATA>${JSON.stringify(genaiResponse.blocks)}</BLOCKS_DATA>`;
       }
 
       // Add GenAI message first

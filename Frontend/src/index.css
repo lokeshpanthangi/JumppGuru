@@ -2,6 +2,89 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Enhanced prose styling for better text formatting */
+@layer components {
+  .prose {
+    @apply text-text-primary;
+  }
+  
+  .prose h1 {
+    @apply text-3xl font-bold mb-6 mt-8 border-b border-gray-200 dark:border-gray-700 pb-2;
+  }
+  
+  .prose h2 {
+    @apply text-2xl font-semibold mb-4 mt-6;
+  }
+  
+  .prose h3 {
+    @apply text-xl font-medium mb-3 mt-5;
+  }
+  
+  .prose h4 {
+    @apply text-lg font-medium mb-2 mt-4;
+  }
+  
+  .prose h5 {
+    @apply text-base font-medium mb-2 mt-3;
+  }
+  
+  .prose h6 {
+    @apply text-sm font-medium mb-2 mt-3;
+  }
+  
+  .prose ol {
+    @apply list-decimal mb-4;
+    padding-left: 0;
+    margin-left: 0;
+  }
+  
+  .prose ul {
+    @apply list-disc mb-4;
+    padding-left: 0;
+    margin-left: 0;
+  }
+  
+  .prose ol li {
+    @apply ml-0 pl-0 mb-2;
+    list-style-position: inside;
+    display: list-item;
+  }
+  
+  .prose ul li {
+    @apply ml-0 pl-0 mb-2;
+    list-style-position: inside;
+    display: list-item;
+  }
+  
+  .prose li {
+    @apply leading-relaxed;
+  }
+  
+  .prose p {
+    @apply leading-relaxed mb-4;
+  }
+  
+  .prose strong {
+    @apply font-semibold;
+  }
+  
+  .prose em {
+    @apply italic;
+  }
+  
+  .prose blockquote {
+    @apply border-l-4 border-gray-300 dark:border-gray-600 pl-4 italic text-text-secondary mb-4;
+  }
+  
+  .prose code {
+    @apply bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded text-sm;
+  }
+  
+  .prose pre {
+    @apply bg-gray-100 dark:bg-gray-800 p-4 rounded-lg overflow-x-auto mb-4;
+  }
+}
+
 /* JumppGuru Design System - Modern AI Chat Interface */
 
 @layer base {
@@ -18,6 +101,10 @@
     --text-muted: 220 9% 65%;
     
     /* Brand Colors */
+    --brand-primary: 158 67% 44%; /* #25BD84 */
+    --brand-primary-hover: 145 63% 42%;
+    --brand-primary-foreground: 0 0% 100%;
+
     --brand-primary: 145 63% 49%; /* #4ADE80 */
     --brand-primary-hover: 145 63% 42%;
     --brand-primary-foreground: 0 0% 100%;
@@ -33,7 +120,8 @@
     --message-user-bg: 145 63% 49%; /* #4ADE80 */
     --message-ai-bg: transparent;
     --input-bg: 0 0% 98%;
-    --input-border: 220 13% 91%;
+    --input-border: 220 13% 85%;
+    --input-field-bg: 220 13% 95%;
     --input-focus: 145 63% 49%;
     
     /* Interactive Elements */
@@ -84,6 +172,7 @@
     --foreground: 210 40% 98%;
     --surface: 220 13% 11%;
     --surface-elevated: 220 13% 13%;
+    --input-field-bg: 220 13% 20%;
     
     /* Text Colors */
     --text-primary: 210 40% 98%;
@@ -91,12 +180,12 @@
     --text-muted: 215 16% 47%;
     
     /* Brand Colors - Same green works well in dark mode */
-    --brand-primary: 145 63% 49%;
-    --brand-primary-hover: 145 63% 55%;
+    --brand-primary: 158 67% 44%; /* #25BD84 */
+    --brand-primary-hover: 158 67% 50%;
     --brand-primary-foreground: 220 13% 9%;
     
     /* Sidebar */
-    --sidebar-bg: 220 13% 11%;
+    --sidebar-bg: 0 0% 4%; /* #0B0B0B */
     --sidebar-border: 215 25% 20%;
     --sidebar-item-hover: 215 25% 16%;
     --sidebar-item-active: 145 63% 15%;

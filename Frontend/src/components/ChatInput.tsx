@@ -144,14 +144,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
       
       <form onSubmit={handleSubmit} className="relative">
         <div 
-          className={`relative flex items-center gap-3 rounded-3xl shadow-md transition-all duration-300 ease-out transform ${
-            centered ? 'p-4 shadow-elevated' : 'p-3'
+          className={`relative flex items-center gap-3 rounded-3xl transition-all duration-300 ease-out transform backdrop-blur-md ${
+            centered ? 'p-4' : 'p-3'
           } ${
             isFocused
-              ? 'bg-surface-elevated border-2 border-green-400 scale-[1.02] shadow-lg'
+              ? 'bg-[hsl(var(--input-field-bg)/0.95)] border-2 border-brand-primary scale-[1.02]'
               : isHovered
-              ? 'bg-surface-elevated border border-input-border scale-[1.01] shadow-lg'
-              : 'bg-surface-elevated border border-input-border scale-100'
+              ? 'bg-[hsl(var(--input-field-bg)/0.90)] border border-input-border scale-[1.01]'
+              : 'bg-[hsl(var(--input-field-bg)/0.85)] border border-input-border/50 scale-100'
           }`}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
