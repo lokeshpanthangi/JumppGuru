@@ -76,7 +76,7 @@ async def generate_tutorial(payload: GenAIRequest):
 
                 blocks.append({
                     "type": "image",
-                    "alt": "Generated illustration",
+                    "alt": "",
                     "data_url": f"data:{mime};base64,{img_b64}"
                 })
 
