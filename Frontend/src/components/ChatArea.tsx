@@ -251,7 +251,7 @@ const getTimeOfDayGreeting = (): string => {
     return afternoonMessages[Math.floor(Math.random() * afternoonMessages.length)];
   }
   
-  const eveningMessages = ['Welcome Batman', 'Evening, Nani', 'Dream On, Nani'];
+  const eveningMessages = ['Hello Batman', 'Evening, User', 'Dream On, User'];
   return eveningMessages[Math.floor(Math.random() * eveningMessages.length)];
 };
 
@@ -283,6 +283,11 @@ export const ChatArea: React.FC = () => {
   const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  
+  // TTS Streaming State
+  const [ttsAudioCache, setTtsAudioCache] = useState<Map<string, Blob[]>>(new Map());
+  const [isLoadingTTS, setIsLoadingTTS] = useState<Map<string, boolean>>(new Map());
+  const audioRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
 
   const hasMessages = state.currentChat?.messages.length ?? 0 > 0;
 
@@ -297,6 +302,37 @@ export const ChatArea: React.FC = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [state.currentChat?.messages]);
+
+  // Cleanup audio when component unmounts or chat changes
+  useEffect(() => {
+    return () => {
+      // Stop all audio playback
+      audioRefs.current.forEach((audio) => {
+        audio.pause();
+        audio.src = '';
+      });
+      audioRefs.current.clear();
+      
+      // Stop speech synthesis
+      speechSynthesis.cancel();
+      
+      // Clear TTS state
+      setTtsAudioCache(new Map());
+      setIsLoadingTTS(new Map());
+      setPlayingVoice(null);
+    };
+  }, [state.currentChatId]); // Clear when chat changes
+
+  // Cleanup when component unmounts
+  useEffect(() => {
+    return () => {
+      audioRefs.current.forEach((audio) => {
+        audio.pause();
+        audio.src = '';
+      });
+      speechSynthesis.cancel();
+    };
+  }, []);
 
   const handleMessageSent = () => {
     if (showCenteredInput) {
@@ -360,22 +396,233 @@ export const ChatArea: React.FC = () => {
     });
   };
 
-  const handleSpeakMessage = (content: string, messageId: string) => {
-    if ('speechSynthesis' in window) {
-      if (playingVoice === messageId) {
-        // Stop current speech
-        speechSynthesis.cancel();
-        setPlayingVoice(null);
+  const handleSpeakMessage = async (content: string, messageId: string) => {
+    // Check if this specific message was generated in research mode
+    const message = state.currentChat?.messages.find(msg => msg.id === messageId);
+    const isResearchModeMessage = message?.mode === 'research';
+    const chatId = state.currentChat?.backendChatId;
+    
+    if (playingVoice === messageId) {
+      // Stop current playback
+      if (isResearchModeMessage && chatId) {
+        const audioElement = audioRefs.current.get(messageId);
+        if (audioElement) {
+          audioElement.pause();
+          audioElement.currentTime = 0;
+        }
       } else {
-        // Stop any current speech and start new one
         speechSynthesis.cancel();
-        setPlayingVoice(messageId);
-        
+      }
+      setPlayingVoice(null);
+      return;
+    }
+
+    // Stop any current playback
+    if (playingVoice) {
+      const currentAudio = audioRefs.current.get(playingVoice);
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+      }
+      speechSynthesis.cancel();
+    }
+
+    setPlayingVoice(messageId);
+
+    if (isResearchModeMessage && chatId) {
+      // Use TTS streaming for research mode messages
+      setNotification('Loading high-quality audio...');
+      setTimeout(() => setNotification(null), 3000);
+      await handleTTSStreaming(chatId, messageId);
+    } else {
+      // Use existing speech synthesis for non-research mode messages
+      if ('speechSynthesis' in window) {
         const utterance = new SpeechSynthesisUtterance(content);
         utterance.onend = () => setPlayingVoice(null);
         utterance.onerror = () => setPlayingVoice(null);
         speechSynthesis.speak(utterance);
       }
+    }
+  };
+
+  const handleTTSStreaming = async (chatId: string, messageId: string) => {
+    try {
+      // Check if we already have cached audio files for this message
+      const cachedFiles = ttsAudioCache.get(messageId);
+      if (cachedFiles && cachedFiles.length > 0) {
+        // Play the combined cached audio
+        await playCombinedAudio(cachedFiles, messageId);
+        return;
+      }
+
+      // Set loading state
+      setIsLoadingTTS(prev => new Map(prev.set(messageId, true)));
+
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
+      
+      // Start TTS generation
+      const response = fetch(`${BACKEND_URL}/tts/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          chat_id: chatId
+        })
+      });
+
+      // Wait 10 seconds before starting to fetch files
+      await new Promise(resolve => setTimeout(resolve, 10000));
+
+      // Fetch all audio files
+      const audioFiles: Blob[] = [];
+      let iteration = 1;
+      let consecutiveFailures = 0;
+      const maxConsecutiveFailures = 1;
+      let shouldContinueFetching = true;
+
+      console.log('Starting to fetch all audio files...');
+
+      while (shouldContinueFetching) {
+    
+
+        try {
+          console.log(`Fetching audio file: ${chatId}_${iteration}.mp3`);
+          const audioResponse = await fetch(`${BACKEND_URL}/tts/file/${chatId}_${iteration}.mp3`);
+          
+          if (audioResponse.ok) {
+            const audioBlob = await audioResponse.blob();
+            audioFiles.push(audioBlob);
+            consecutiveFailures = 0;
+            
+            console.log(`Successfully fetched file ${iteration}, total files: ${audioFiles.length}`);
+            iteration++;
+            
+            // Small delay between requests
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+          } else if (audioResponse.status === 404) {
+            consecutiveFailures++;
+            console.log(`File ${iteration} not found (404), consecutive failures: ${consecutiveFailures}`);
+            
+            if (consecutiveFailures >= maxConsecutiveFailures) {
+              console.log('Max consecutive failures reached, stopping fetch');
+              shouldContinueFetching = false;
+            } else {
+              iteration++;
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+          } else {
+            throw new Error(`Audio fetch failed: ${audioResponse.status}`);
+          }
+        } catch (error) {
+          console.error(`Error fetching audio file ${iteration}:`, error);
+          consecutiveFailures++;
+          
+          if (consecutiveFailures >= maxConsecutiveFailures) {
+            console.log('Max consecutive failures reached due to errors, stopping fetch');
+            shouldContinueFetching = false;
+          } else {
+            iteration++;
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+      }
+
+      if (audioFiles.length > 0) {
+        console.log(`Finished fetching ${audioFiles.length} audio files. Combining and playing...`);
+        
+        // Cache the audio files
+        setTtsAudioCache(prev => new Map(prev.set(messageId, audioFiles)));
+        
+        // Combine and play the audio
+        await playCombinedAudio(audioFiles, messageId);
+      } else {
+        console.log('No audio files were fetched');
+        setPlayingVoice(null);
+        setNotification('No audio files found');
+        setTimeout(() => setNotification(null), 3000);
+      }
+      
+    } catch (error) {
+      console.error('TTS Streaming Error:', error);
+      setNotification('Failed to load audio. Please try again.');
+      setTimeout(() => setNotification(null), 3000);
+      setPlayingVoice(null);
+    } finally {
+      setIsLoadingTTS(prev => new Map(prev.set(messageId, false)));
+    }
+  };
+
+  const combineAudioFiles = async (audioFiles: Blob[]): Promise<Blob> => {
+    console.log(`Combining ${audioFiles.length} audio files...`);
+    
+    // Create a new blob by combining all audio file data
+    const combinedArrayBuffer = await Promise.all(
+      audioFiles.map(file => file.arrayBuffer())
+    );
+    
+    // Calculate total size
+    const totalSize = combinedArrayBuffer.reduce((total, buffer) => total + buffer.byteLength, 0);
+    
+    // Create a new Uint8Array to hold all the data
+    const combinedBuffer = new Uint8Array(totalSize);
+    let offset = 0;
+    
+    // Copy each audio file's data into the combined buffer
+    for (const buffer of combinedArrayBuffer) {
+      combinedBuffer.set(new Uint8Array(buffer), offset);
+      offset += buffer.byteLength;
+    }
+    
+    // Create a new blob with the combined data
+    const combinedBlob = new Blob([combinedBuffer], { type: 'audio/mpeg' });
+    console.log(`Combined audio created: ${combinedBlob.size} bytes`);
+    
+    return combinedBlob;
+  };
+
+  const playCombinedAudio = async (audioFiles: Blob[], messageId: string) => {
+    try {
+      console.log(`Starting combined audio playback for ${audioFiles.length} files`);
+      
+      // Combine all audio files into a single blob
+      const combinedAudio = await combineAudioFiles(audioFiles);
+      
+      // Create object URL for the combined audio
+      const audioUrl = URL.createObjectURL(combinedAudio);
+      
+      // Create audio element
+      const audioElement = new Audio();
+      audioElement.src = audioUrl;
+      
+      // Store the audio element
+      audioRefs.current.set(messageId, audioElement);
+      
+      // Set up event handlers
+      audioElement.onended = () => {
+        console.log('Combined audio playback finished');
+        URL.revokeObjectURL(audioUrl);
+        setPlayingVoice(null);
+      };
+
+      audioElement.onerror = (e) => {
+        console.error('Combined audio playback error:', e);
+        URL.revokeObjectURL(audioUrl);
+        setPlayingVoice(null);
+      };
+      
+      audioElement.onloadeddata = () => {
+        console.log('Combined audio loaded successfully');
+      };
+
+      // Start playing
+      await audioElement.play();
+      console.log('Combined audio started playing');
+      
+    } catch (error) {
+      console.error('Error playing combined audio:', error);
+      setPlayingVoice(null);
     }
   };
 
@@ -542,9 +789,6 @@ export const ChatArea: React.FC = () => {
                         </div>
                       )}
                       <p className="whitespace-pre-wrap">{message.content}</p>
-                      <div className="text-xs text-text-muted mt-2">
-                        {formatMessageTime(message.timestamp)}
-                      </div>
                     </div>
                   ) : (
                     <div 
@@ -617,14 +861,25 @@ export const ChatArea: React.FC = () => {
                           </button>
                           <button
                             onClick={() => handleSpeakMessage(message.content, message.id)}
+                            disabled={isLoadingTTS.get(message.id)}
                             className={`p-2 rounded-lg hover:bg-button-secondary transition-colors duration-200 ${
                               playingVoice === message.id 
                                 ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/20' 
+                                : isLoadingTTS.get(message.id)
+                                ? 'text-orange-500 bg-orange-100 dark:bg-orange-900/20'
                                 : 'text-text-muted hover:text-blue-500'
-                            }`}
-                            title={playingVoice === message.id ? 'Stop reading' : 'Read aloud'}
+                            } ${isLoadingTTS.get(message.id) ? 'cursor-wait' : ''}`}
+                            title={
+                              isLoadingTTS.get(message.id) 
+                                ? 'Loading audio...' 
+                                : playingVoice === message.id 
+                                ? 'Stop reading' 
+                                : 'Read aloud'
+                            }
                           >
-                            {playingVoice === message.id ? (
+                            {isLoadingTTS.get(message.id) ? (
+                              <Volume2 className="w-4 h-4 animate-pulse" />
+                            ) : playingVoice === message.id ? (
                               <VolumeX className="w-4 h-4 animate-pulse" />
                             ) : (
                               <Volume2 className="w-4 h-4" />

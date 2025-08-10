@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Waves, Paperclip, Pin, Search, Globe, Mic, X } from 'lucide-react';
+import { Waves, Paperclip, Pin, Search, Globe, Mic, X, MicOff } from 'lucide-react';
 import { useChatContext, type ChatMode } from '../contexts/ChatContext';
 import { useLiveKit } from '../hooks/useLiveKit';
+import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 
 interface ChatInputProps {
   centered?: boolean;
@@ -14,8 +15,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
   const [isFocused, setIsFocused] = useState(false);
   const [showModeDropdown, setShowModeDropdown] = useState(false);
   const [showNotification, setShowNotification] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Speech Recognition
+  const speechRecognition = useSpeechRecognition();
 
   // Auto-resize textarea function
   const autoResizeTextarea = () => {
@@ -38,6 +43,32 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
   useEffect(() => {
     autoResizeTextarea();
   }, [message, centered]);
+
+  // Update input field with speech recognition transcript
+  useEffect(() => {
+    if (speechRecognition.transcript && speechRecognition.isListening) {
+      setMessage(speechRecognition.transcript);
+    }
+  }, [speechRecognition.transcript, speechRecognition.isListening]);
+
+  // Handle speech recognition errors
+  useEffect(() => {
+    if (speechRecognition.error) {
+      setNotificationMessage(speechRecognition.error);
+      setShowNotification(true);
+      setTimeout(() => setShowNotification(false), 3000);
+    }
+  }, [speechRecognition.error]);
+
+  // Focus input field when speech recognition stops
+  useEffect(() => {
+    if (!speechRecognition.isListening && speechRecognition.transcript && inputRef.current) {
+      inputRef.current.focus();
+      // Position cursor at the end of the text
+      const length = speechRecognition.transcript.length;
+      inputRef.current.setSelectionRange(length, length);
+    }
+  }, [speechRecognition.isListening, speechRecognition.transcript]);
 
   // Check if current chat has used research mode
   const hasUsedResearchMode = state.currentChat?.hasUsedResearchMode || false;
@@ -129,9 +160,24 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
     console.log('Attachment clicked');
   };
 
+  const handleVoiceClick = () => {
+    if (!speechRecognition.supported) {
+      alert('Speech recognition is not supported in this browser. Please use Chrome, Edge, or Safari.');
+      return;
+    }
+
+    if (speechRecognition.isListening) {
+      speechRecognition.stopListening();
+    } else {
+      speechRecognition.resetTranscript();
+      speechRecognition.startListening();
+    }
+  };
+
   const handleModeSelect = (mode: ChatMode) => {
     // Check if trying to select research mode when it's already used
     if (mode === 'research' && hasUsedResearchMode) {
+      setNotificationMessage('Research limit reached. Try creating a new chat.');
       setShowNotification(true);
       setTimeout(() => setShowNotification(false), 3000);
       setShowModeDropdown(false);
@@ -278,12 +324,39 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
           {/* Voice Button */}
           <button
             type="button"
+            onClick={handleVoiceClick}
+            disabled={!speechRecognition.supported}
             className={`flex-shrink-0 rounded-full flex items-center justify-center transition-all duration-300 ease-out group ${
               centered ? 'w-12 h-12' : 'w-10 h-10'
-            } bg-button-secondary hover:bg-brand-primary text-text-secondary hover:text-white shadow-md hover:shadow-xl transform hover:scale-110 active:scale-95`}
-            aria-label="Voice input"
+            } ${
+              speechRecognition.isListening
+                ? 'bg-red-500 text-white hover:bg-red-600 shadow-lg animate-pulse'
+                : speechRecognition.supported
+                ? 'bg-button-secondary hover:bg-brand-primary text-text-secondary hover:text-white'
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            } shadow-md hover:shadow-xl transform hover:scale-110 active:scale-95 ${
+              !speechRecognition.supported ? 'hover:scale-100' : ''
+            }`}
+            aria-label={
+              speechRecognition.isListening 
+                ? "Stop voice input" 
+                : speechRecognition.supported 
+                ? "Start voice input"
+                : "Voice input not supported"
+            }
+            title={
+              !speechRecognition.supported 
+                ? "Speech recognition not supported in this browser"
+                : speechRecognition.isListening
+                ? "Click to stop recording"
+                : "Click to start voice input"
+            }
           >
-            <Mic className={`${centered ? 'w-5 h-5' : 'w-4 h-4'} transition-all duration-300 group-hover:scale-110`} />
+            {speechRecognition.isListening ? (
+              <MicOff className={`${centered ? 'w-5 h-5' : 'w-4 h-4'} transition-all duration-300 group-hover:scale-110`} />
+            ) : (
+              <Mic className={`${centered ? 'w-5 h-5' : 'w-4 h-4'} transition-all duration-300 group-hover:scale-110`} />
+            )}
           </button>
 
           {/* Live Mode Toggle Button */}
@@ -308,10 +381,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
         </div>
       </form>
 
-      {/* Research Mode Limit Notification */}
+      {/* Notifications */}
       {showNotification && (
-        <div className="fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg z-50 animate-fade-in">
-          Research limit reached. Try creating a new chat.
+        <div className={`fixed top-4 right-4 px-4 py-2 rounded-lg shadow-lg z-50 animate-fade-in ${
+          notificationMessage.includes('error') || notificationMessage.includes('Error')
+            ? 'bg-red-500 text-white'
+            : 'bg-blue-500 text-white'
+        }`}>
+          {notificationMessage || 'Research limit reached. Try creating a new chat.'}
+        </div>
+      )}
+
+      {/* Voice Recognition Status */}
+      {speechRecognition.isListening && (
+        <div className="fixed top-16 right-4 bg-red-500 text-white px-3 py-1 rounded-full shadow-lg z-50 flex items-center gap-2 animate-fade-in">
+          <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+          <span className="text-sm">Listening...</span>
         </div>
       )}
     </div>

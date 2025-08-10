@@ -187,7 +187,7 @@ export const Sidebar: React.FC = () => {
               >
                 <MessageSquarePlus className="w-5 h-5" />
                 {!state.sidebarCollapsed && (
-                  <span className="font-medium">New Chattt</span>
+                  <span className="font-medium">New Chat</span>
                 )}
               </button>
             </div>
