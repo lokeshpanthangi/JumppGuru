@@ -4,6 +4,7 @@ from typing import List, Optional
 class QueryRequest(BaseModel):
     query: str
     user_id: Optional[str] = None
+    chat_id: Optional[str] = None
     lang: Optional[str] = "auto"  # auto | english | hinglish
     mode: Optional[str] = "general"  # general | web
 
