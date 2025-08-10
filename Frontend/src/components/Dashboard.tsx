@@ -1,16 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, MessageSquare, Send, Calendar, Flame, TrendingUp, Clock, Users } from 'lucide-react';
 import { useChatContext } from '../contexts/ChatContext';
-
-const FloatingOrb: React.FC<{ className?: string; delay?: number }> = ({ 
-  className = '', 
-  delay = 0 
-}) => (
-  <div 
-    className={`absolute rounded-full animate-float ${className}`}
-    style={{ animationDelay: `${delay}s` }}
-  />
-);
+import { Squares } from '../components/ui/squares-background';
 
 export const Dashboard: React.FC = () => {
   const { state, setDashboard } = useChatContext();
@@ -37,7 +28,6 @@ export const Dashboard: React.FC = () => {
       title: 'Total Conversations',
       value: state.chats.length.toString(),
       icon: MessageSquare,
-      emoji: '💬',
       change: '+12%',
       changeType: 'positive' as const,
     },
@@ -45,7 +35,6 @@ export const Dashboard: React.FC = () => {
       title: 'Messages Sent',
       value: userMessages.toString(),
       icon: Send,
-      emoji: '📨',
       change: '+8%',
       changeType: 'positive' as const,
     },
@@ -53,7 +42,6 @@ export const Dashboard: React.FC = () => {
       title: "Today's Sessions",
       value: todayChats.toString(),
       icon: Calendar,
-      emoji: '📅',
       change: todayChats > 0 ? '+100%' : '0%',
       changeType: todayChats > 0 ? 'positive' : 'neutral' as const,
     },
@@ -61,7 +49,6 @@ export const Dashboard: React.FC = () => {
       title: 'Learning Streak',
       value: '7 days',
       icon: Flame,
-      emoji: '🔥',
       change: '+1 day',
       changeType: 'positive' as const,
     },
@@ -113,21 +100,18 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div 
-      className="flex-1 bg-chat-bg transition-all duration-500 ease-in-out relative overflow-hidden"
+      className="flex-1 transition-all duration-500 ease-in-out relative overflow-hidden"
     >
-      {/* Floating Orbs */}
-      <FloatingOrb 
-        className="w-64 h-64 bg-gradient-orb-1 top-10 -right-32" 
-        delay={0} 
-      />
-      <FloatingOrb 
-        className="w-48 h-48 bg-gradient-orb-2 bottom-20 -left-24" 
-        delay={2} 
-      />
-      <FloatingOrb 
-        className="w-32 h-32 bg-gradient-orb-1 top-1/2 right-1/4" 
-        delay={4} 
-      />
+      {/* Squares Background */}
+      <div className="absolute inset-0">
+        <Squares 
+          direction="diagonal"
+          speed={0.5}
+          squareSize={40}
+          borderColor="#333" 
+          hoverFillColor="#222"
+        />
+      </div>
 
       <div className="relative z-10 p-8">
         {/* Header */}
@@ -162,7 +146,9 @@ export const Dashboard: React.FC = () => {
               style={{ animationDelay: `${0.1 + index * 0.1}s` }}
             >
               <div className="flex items-center justify-between mb-4">
-                <div className="text-2xl">{stat.emoji}</div>
+                <div className="p-2 rounded-lg bg-surface border border-input-border">
+                  <stat.icon className="w-5 h-5 text-brand-primary" />
+                </div>
                 <div className={`text-xs px-2 py-1 rounded-full ${
                   stat.changeType === 'positive' 
                     ? 'bg-brand-primary/10 text-brand-primary' 

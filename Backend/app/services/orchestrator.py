@@ -55,7 +55,7 @@ async def generate_llm_response(query: str, user_lang: str, history) -> str:
         "Use conversational, easy-to-understand tone. Avoid technical jargon."
     ).format(**values)
 
-    messages = [{"role": "system", "content": system_prompt}] +      + [
+    messages = [{"role": "system", "content": system_prompt}] + [
         {"role": "user", "content": query}
     ]
 
