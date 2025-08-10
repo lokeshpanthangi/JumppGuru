@@ -10,7 +10,6 @@ from app.services.web_fallback import web_fallback_answer
 from app.services.chat_history import save_message, get_recent_messages, get_assistant_text_by_chat_id
 
 
-
 # Load environment variables from .env file, if present
 load_dotenv()
 
@@ -59,11 +58,6 @@ async def generate_llm_response(query: str, user_lang: str, history, additional_
         {"role": "user", "content": query}
     ]
 
-
-
-    print("-------------messages--------------------")
-    print(messages)
-    print("-------------messages--------------------")
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=messages,

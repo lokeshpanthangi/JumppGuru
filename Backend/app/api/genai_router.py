@@ -2,6 +2,7 @@
 import os
 import base64
 import uuid
+import re
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query
 from dotenv import load_dotenv
