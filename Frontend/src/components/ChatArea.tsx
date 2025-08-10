@@ -240,9 +240,24 @@ const Aurora: React.FC<AuroraProps> = (props) => {
 
 const getTimeOfDayGreeting = (): string => {
   const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
+  
+  if (hour < 12) {
+    const morningMessages = ['Coffee Time', 'Sunny Start', "Let's Start", "Sun's Out"];
+    return morningMessages[Math.floor(Math.random() * morningMessages.length)];
+  }
+  
+  if (hour < 17) {
+    const afternoonMessages = ['Midday Vibes', 'Sunny Noon', 'Good Afternoon'];
+    return afternoonMessages[Math.floor(Math.random() * afternoonMessages.length)];
+  }
+  
+  const eveningMessages = ['Welcome Batman', 'Evening, Nani', 'Dream On, Nani'];
+  return eveningMessages[Math.floor(Math.random() * eveningMessages.length)];
+};
+
+const isEveningTime = (): boolean => {
+  const hour = new Date().getHours();
+  return hour >= 17;
 };
 
 const formatMessageTime = (date: Date | string): string => {
@@ -481,7 +496,10 @@ export const ChatArea: React.FC = () => {
           <div className="text-center mb-8">
             <h1 className="text-5xl font-bold mb-6">
               <span className="gradient-welcome">
-                {getTimeOfDayGreeting()}, {state.userName}
+                {isEveningTime() 
+                  ? getTimeOfDayGreeting() 
+                  : `${getTimeOfDayGreeting()}, ${state.userName}`
+                }
               </span>
             </h1>
             <p className="text-xl text-text-secondary mb-6">
@@ -536,9 +554,9 @@ export const ChatArea: React.FC = () => {
                     >
                       <div className="flex items-center gap-3 mb-3">
                         <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center bg-white">
-                          <img src="/logo.png" alt="JumppGuru Logo" className="w-full h-full object-contain" />
+                          <img src="/logo.png" alt="JumpApp Logo" className="w-full h-full object-contain" />
                         </div>
-                        <span className="font-medium text-text-primary">JumppGuru</span>
+                        <span className="font-medium text-text-primary">JumpApp</span>
                         <span className="text-xs text-text-muted">
                           {formatMessageTime(message.timestamp)}
                         </span>
@@ -641,9 +659,9 @@ export const ChatArea: React.FC = () => {
                 <div className="bg-transparent text-text-primary max-w-[80%]">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center bg-white">
-                      <img src="/logo.png" alt="JumppGuru Logo" className="w-full h-full object-contain" />
+                      <img src="/logo.png" alt="JumpApp Logo" className="w-full h-full object-contain" />
                     </div>
-                    <span className="font-medium text-text-primary">JumppGuru</span>
+                    <span className="font-medium text-text-primary">JumpApp</span>
                   </div>
                   <div className="prose max-w-none">
                     {state.loadingState ? (

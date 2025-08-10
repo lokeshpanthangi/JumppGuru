@@ -193,7 +193,7 @@ const Content: React.FC = () => {
     itemListElement: filtered.map((it, idx) => ({
       '@type': 'ListItem',
       position: idx + 1,
-      url: typeof window !== 'undefined' ? window.location.href : 'https://jumppguru.app/deep-learning',
+      url: typeof window !== 'undefined' ? window.location.href : 'https://jumpapp.app/deep-learning',
       name: it.title,
     })),
   };
@@ -201,9 +201,9 @@ const Content: React.FC = () => {
   return (
     <div className="flex-1 overflow-y-auto bg-chat-bg animate-fade-in">
       <Helmet>
-        <title>Deep Learning History | JumppGuru</title>
+        <title>Deep Learning History | JumpApp</title>
         <meta name="description" content="Browse your deep learning history with summaries, tags, and sources." />
-        <link rel="canonical" href={typeof window !== 'undefined' ? window.location.origin + '/deep-learning' : 'https://jumppguru.app/deep-learning'} />
+        <link rel="canonical" href={typeof window !== 'undefined' ? window.location.origin + '/deep-learning' : 'https://jumpapp.app/deep-learning'} />
         <script type="application/ld+json">{JSON.stringify(itemListJsonLd)}</script>
       </Helmet>
 

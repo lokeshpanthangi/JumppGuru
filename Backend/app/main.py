@@ -7,8 +7,8 @@ from app.api import tts_router
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
-    title="JumppGuru",
-    description="AI + Short Learning Backend for Jumppapp",
+    title="JumpApp",
+    description="AI + Short Learning Backend for JumpApp",
     version="1.0"
 )
 

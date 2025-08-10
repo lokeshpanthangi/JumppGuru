@@ -39,9 +39,19 @@ const formatChatDate = (date: Date): string => {
 
 const getTimeOfDayGreeting = (): string => {
   const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
+  
+  if (hour < 12) {
+    const morningMessages = ['Coffee Time', 'Sunny Start', "Let's Start", "Sun's Out"];
+    return morningMessages[Math.floor(Math.random() * morningMessages.length)];
+  }
+  
+  if (hour < 17) {
+    const afternoonMessages = ['Midday Vibes', 'Sunny Noon', 'Good Afternoon'];
+    return afternoonMessages[Math.floor(Math.random() * afternoonMessages.length)];
+  }
+  
+  const eveningMessages = ['Hello Batman', 'Evening, User', 'Dream On, User'];
+  return eveningMessages[Math.floor(Math.random() * eveningMessages.length)];
 };
 
 export const Sidebar: React.FC = () => {
@@ -118,10 +128,10 @@ export const Sidebar: React.FC = () => {
                   className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center cursor-pointer"
                   onClick={state.sidebarCollapsed ? toggleSidebar : undefined}
                 >
-                  <img src="/logo.png" alt="JumppGuru Logo" className="w-full h-full object-contain" />
+                  <img src="/logo.png" alt="JumpApp Logo" className="w-full h-full object-contain" />
                 </div>
                 {!state.sidebarCollapsed && (
-                  <h1 className="text-xl font-bold text-text-primary">JumppGuru</h1>
+                  <h1 className="text-xl font-bold text-text-primary">JumpApp</h1>
                 )}
               </div>
               {!state.sidebarCollapsed && (

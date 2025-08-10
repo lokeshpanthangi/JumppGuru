@@ -183,12 +183,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
           }}
         >
           {/* Left Buttons */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 self-center">
             {/* Attachment Button */}
             <button
               type="button"
               onClick={handleAttachment}
-              className="flex-shrink-0 p-2 rounded-full transition-all duration-300 ease-out transform hover:bg-button-secondary hover:scale-110 active:scale-95 text-text-secondary hover:text-text-primary"
+              className="flex-shrink-0 p-2 rounded-full transition-all duration-300 ease-out transform hover:bg-button-secondary hover:scale-110 active:scale-95 text-text-secondary hover:text-text-primary flex items-center justify-center"
               aria-label="Attach file"
             >
               <Paperclip className="w-5 h-5 transition-all duration-300" />
@@ -199,7 +199,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
               <button
                 type="button"
                 onClick={() => setShowModeDropdown(!showModeDropdown)}
-                className={`flex-shrink-0 p-2 rounded-full transition-all duration-300 ease-out transform hover:bg-button-secondary hover:scale-110 active:scale-95 ${getModeColor()} hover:text-text-primary ${
+                className={`flex-shrink-0 p-2 rounded-full transition-all duration-300 ease-out transform hover:bg-button-secondary hover:scale-110 active:scale-95 flex items-center justify-center ${getModeColor()} hover:text-text-primary ${
                   showModeDropdown ? 'scale-110 bg-button-secondary' : ''
                 }`}
                 aria-label="Select mode"

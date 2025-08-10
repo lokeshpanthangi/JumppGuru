@@ -63,7 +63,7 @@ const initialState: ChatState = {
   chats: [],
   currentChatId: null,
   currentChat: null,
-  theme: 'light',
+  theme: 'dark',
   sidebarCollapsed: true,
   showDashboard: false,
   userName: 'User',

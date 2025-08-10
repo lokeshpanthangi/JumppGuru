@@ -80,7 +80,7 @@ export const Dashboard: React.FC = () => {
       icon: Calendar,
     },
     {
-      action: 'Joined JumppGuru',
+      action: 'Joined JumpApp',
       time: '7 days ago',
       icon: Users,
     },
