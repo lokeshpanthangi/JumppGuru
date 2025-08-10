@@ -9,6 +9,7 @@ class GenAIRequest(BaseModel):
     max_images: Optional[int] = 5   # maximum images allowed to generate
 
 class TextBlock(BaseModel):
+    
     type: str = "text"              # "text"
     content: str                    # markdown content
 
@@ -21,4 +22,5 @@ class ImageBlock(BaseModel):
 class GenAIResponse(BaseModel):
     source: str                     # "LLM+IMG"
     language: str
-    blocks: List[dict]              # list of TextBlock | ImageBlock (kept as dict for flexibility)
+    blocks: List[dict]   
+    chat_id: str
