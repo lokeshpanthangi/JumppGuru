@@ -9,3 +9,7 @@ langdetect
 pymongo
 requests
 google-generativeai
+websockets
+sarvamai
+pillow
+boto3
