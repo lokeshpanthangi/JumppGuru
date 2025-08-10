@@ -26,7 +26,7 @@ const ImageRenderer: React.FC<ImageRendererProps> = ({ src, alt, title }) => {
     
     // Handle different image source types
     if (src.startsWith('http://') || src.startsWith('https://')) {
-      // Regular URL - use as is
+      // Regular URL (including S3 URLs) - use as is
       finalSrc = src;
     } else if (src.startsWith('data:image/')) {
       // Already a proper data URL - use as is

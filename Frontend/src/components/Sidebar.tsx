@@ -103,13 +103,15 @@ export const Sidebar: React.FC = () => {
     <>
       {/* Sidebar */}
       <aside 
-        className={`h-full bg-sidebar-bg border-r border-sidebar-border transition-all duration-sidebar ease-sidebar flex-shrink-0 ${
-          state.sidebarCollapsed ? 'w-16' : 'w-80'
+        className={`h-full transition-all duration-sidebar ease-sidebar flex-shrink-0 border-r border-sidebar-border ${
+          state.sidebarCollapsed 
+            ? 'w-16 bg-chat-bg' 
+            : 'w-80 bg-sidebar-bg'
         }`}
       >
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className={`border-b border-sidebar-border transition-all duration-sidebar ease-sidebar ${state.sidebarCollapsed ? 'p-3' : 'p-6'}`}>
+          <div className={`transition-all duration-sidebar ease-sidebar ${state.sidebarCollapsed ? 'p-3' : 'p-6'}`}>
             <div className={`flex items-center gap-3 transition-all duration-sidebar ease-sidebar ${state.sidebarCollapsed ? 'justify-center mb-3' : 'justify-between mb-6'}`}>
               <div className="flex items-center gap-3">
                 <div 
@@ -250,7 +252,7 @@ export const Sidebar: React.FC = () => {
           </div>
 
           {/* User Section */}
-          <div className={`border-t border-sidebar-border transition-all duration-sidebar ease-sidebar ${state.sidebarCollapsed ? 'p-3' : 'p-4'}`}>
+          <div className={`transition-all duration-sidebar ease-sidebar ${state.sidebarCollapsed ? 'p-3' : 'p-4'}`}>
             <div className={`flex items-center transition-all duration-sidebar ease-sidebar ${state.sidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
               <div className={`flex items-center transition-all duration-sidebar ease-sidebar ${state.sidebarCollapsed ? 'flex-col gap-1' : 'gap-3'}`}>
                 <div className="relative">

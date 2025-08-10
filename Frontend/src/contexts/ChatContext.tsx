@@ -3,9 +3,11 @@ import React, { createContext, useContext, useReducer, useEffect } from 'react';
 export type Message = {
   id: string;
   content: string;
-  type: 'user' | 'ai' | 'quiz';
+  type: 'user' | 'ai';
   timestamp: Date;
   mode?: 'web' | 'research';
+  isStreaming?: boolean;
+  isCurrentlyGenerating?: boolean;
 };
 
 export type Chat = {
@@ -15,6 +17,7 @@ export type Chat = {
   createdAt: Date;
   updatedAt: Date;
   backendChatId?: string;
+  hasUsedResearchMode: boolean;
 };
 
 export type ChatMode = 'web' | 'research' | null;
@@ -42,7 +45,10 @@ type ChatAction =
   | { type: 'DELETE_CHAT'; chatId: string }
   | { type: 'ADD_MESSAGE'; chatId: string; message: Message }
   | { type: 'UPDATE_MESSAGE'; chatId: string; messageId: string; content: string }
+  | { type: 'SET_MESSAGE_STREAMING'; chatId: string; messageId: string; isStreaming: boolean }
+  | { type: 'SET_CURRENTLY_GENERATING'; chatId: string; messageId: string | null }
   | { type: 'SET_BACKEND_CHAT_ID'; chatId: string; backendChatId: string }
+  | { type: 'SET_RESEARCH_MODE_USED'; chatId: string }
   | { type: 'SET_THEME'; theme: Theme }
   | { type: 'TOGGLE_SIDEBAR' }
   | { type: 'SET_DASHBOARD'; show: boolean }
@@ -58,7 +64,7 @@ const initialState: ChatState = {
   currentChatId: null,
   currentChat: null,
   theme: 'light',
-  sidebarCollapsed: false,
+  sidebarCollapsed: true,
   showDashboard: false,
   userName: 'User',
   isTyping: false,
@@ -161,12 +167,93 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       };
     }
     
+    case 'SET_MESSAGE_STREAMING': {
+      const updatedChats = state.chats.map(chat => {
+        if (chat.id === action.chatId) {
+          const updatedMessages = chat.messages.map(message => {
+            if (message.id === action.messageId) {
+              return {
+                ...message,
+                isStreaming: action.isStreaming,
+              };
+            }
+            return message;
+          });
+          
+          return {
+            ...chat,
+            messages: updatedMessages,
+          };
+        }
+        return chat;
+      });
+      
+      const currentChat = state.currentChatId === action.chatId 
+        ? updatedChats.find(c => c.id === action.chatId) || null
+        : state.currentChat;
+      
+      return {
+        ...state,
+        chats: updatedChats,
+        currentChat,
+      };
+    }
+    
+    case 'SET_CURRENTLY_GENERATING': {
+      const updatedChats = state.chats.map(chat => {
+        if (chat.id === action.chatId) {
+          const updatedMessages = chat.messages.map(message => ({
+            ...message,
+            isCurrentlyGenerating: message.id === action.messageId
+          }));
+          
+          return {
+            ...chat,
+            messages: updatedMessages,
+          };
+        }
+        return chat;
+      });
+      
+      const currentChat = state.currentChatId === action.chatId 
+        ? updatedChats.find(c => c.id === action.chatId) || null
+        : state.currentChat;
+      
+      return {
+        ...state,
+        chats: updatedChats,
+        currentChat,
+      };
+    }
+    
     case 'SET_BACKEND_CHAT_ID': {
       const updatedChats = state.chats.map(chat => {
         if (chat.id === action.chatId) {
           return {
             ...chat,
             backendChatId: action.backendChatId,
+          };
+        }
+        return chat;
+      });
+      
+      const currentChat = state.currentChatId === action.chatId 
+        ? updatedChats.find(c => c.id === action.chatId) || null
+        : state.currentChat;
+      
+      return {
+        ...state,
+        chats: updatedChats,
+        currentChat,
+      };
+    }
+
+    case 'SET_RESEARCH_MODE_USED': {
+      const updatedChats = state.chats.map(chat => {
+        if (chat.id === action.chatId) {
+          return {
+            ...chat,
+            hasUsedResearchMode: true,
           };
         }
         return chat;
@@ -222,8 +309,10 @@ type ChatContextType = {
   deleteChat: (chatId: string) => void;
   sendMessage: (content: string, mode?: ChatMode) => Promise<void>;
   addAIMessage: (content: string) => void;
-  addQuizMessage: (content: string) => void;
+  setMessageStreaming: (chatId: string, messageId: string, isStreaming: boolean) => void;
+  setCurrentlyGenerating: (chatId: string, messageId: string | null) => void;
   setBackendChatId: (chatId: string, backendChatId: string) => void;
+  setResearchModeUsed: (chatId: string) => void;
   setTheme: (theme: Theme) => void;
   toggleSidebar: () => void;
   setDashboard: (show: boolean) => void;
@@ -252,6 +341,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       messages: [],
       createdAt: new Date(),
       updatedAt: new Date(),
+      hasUsedResearchMode: false,
     };
     dispatch({ type: 'CREATE_CHAT', chat: newChat });
     return chatId;
@@ -292,20 +382,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     try {
       // Only proceed with GenAI and YouTube API calls if mode is 'research'
       if (mode === 'research') {
-        // Sequential loading states with 3-second intervals
-        const loadingStates = [
-          'Generating content...',
-          'Generating images...',
-          'Finding related videos...'
-        ];
+        // Set initial loading state
+        dispatch({ type: 'SET_LOADING_STATE', loadingState: 'Processing your research query...' });
 
-        // Show loading states sequentially
-        for (let i = 0; i < loadingStates.length; i++) {
-          dispatch({ type: 'SET_LOADING_STATE', loadingState: loadingStates[i] });
-          await new Promise(resolve => setTimeout(resolve, 3000));
-        }
-
-        // Start both API calls in parallel
+        // Start both API calls immediately in parallel
         const genaiPromise = fetch(`${BACKEND_URL}/genai/generate`, {
           method: 'POST',
           headers: {
@@ -358,12 +438,15 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           genaiContent = `<BLOCKS_DATA>${JSON.stringify(genaiResponse.blocks)}</BLOCKS_DATA>`;
         }
 
-        // Add GenAI message first
+        // Add GenAI message first - no streaming for research mode
         const genaiMessage: Message = {
           id: aiMessageId,
           content: genaiContent,
           type: 'ai',
           timestamp: new Date(),
+          mode: 'research',
+          isStreaming: false,
+          isCurrentlyGenerating: false,
         };
         dispatch({ type: 'ADD_MESSAGE', chatId, message: genaiMessage });
 
@@ -430,20 +513,35 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           messageId: aiMessageId,
           content: genaiContent + youtubeContent
         });
+
+        // Mark research mode as used for this chat
+        dispatch({ type: 'SET_RESEARCH_MODE_USED', chatId });
       } else {
         // For non-research modes, use the /api/query endpoint
         try {
+          // Get the current chat's backend chat_id if available
+          const currentChat = state.chats.find(chat => chat.id === chatId);
+          const backendChatId = currentChat?.backendChatId;
+          
+          // Prepare request body with optional chat_id
+          const requestBody: any = {
+            user_id: HARDCODED_USER_ID,
+            query: content.trim(),
+            mode: mode || 'general',
+            lang: 'auto'
+          };
+          
+          // Add chat_id if available
+          if (backendChatId) {
+            requestBody.chat_id = backendChatId;
+          }
+
           const queryResponse = await fetch(`${BACKEND_URL}/query`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-              user_id: HARDCODED_USER_ID,
-              query: content.trim(),
-              mode: mode || 'general',
-              lang: 'auto'
-            })
+            body: JSON.stringify(requestBody)
           });
 
           if (!queryResponse.ok) {
@@ -464,6 +562,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             content: responseContent,
             type: 'ai',
             timestamp: new Date(),
+            isStreaming: true,
+            isCurrentlyGenerating: true,
           };
           dispatch({ type: 'ADD_MESSAGE', chatId, message: apiMessage });
         } catch (error) {
@@ -473,6 +573,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             content: 'Sorry, I encountered an error while processing your request. Please make sure the backend server is running.',
             type: 'ai',
             timestamp: new Date(),
+            isStreaming: true,
+            isCurrentlyGenerating: true,
           };
           dispatch({ type: 'ADD_MESSAGE', chatId, message: errorMessage });
         }
@@ -487,6 +589,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         content: 'Sorry, I encountered an error while processing your request. Please make sure the backend server is running on.',
         type: 'ai',
         timestamp: new Date(),
+        isStreaming: true,
+        isCurrentlyGenerating: true,
       };
 
       dispatch({ type: 'ADD_MESSAGE', chatId, message: errorMessage });
@@ -544,24 +648,20 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'ADD_MESSAGE', chatId, message: aiMessage });
   };
 
-  const addQuizMessage = (content: string) => {
-    let chatId = state.currentChatId;
-    if (!chatId) {
-      chatId = createNewChat();
-    }
+  const setCurrentlyGenerating = (chatId: string, messageId: string | null) => {
+    dispatch({ type: 'SET_CURRENTLY_GENERATING', chatId, messageId });
+  };
 
-    const quizMessage: Message = {
-      id: `quiz-${Date.now()}`,
-      content,
-      type: 'quiz',
-      timestamp: new Date(),
-    };
-
-    dispatch({ type: 'ADD_MESSAGE', chatId, message: quizMessage });
+  const setMessageStreaming = (chatId: string, messageId: string, isStreaming: boolean) => {
+    dispatch({ type: 'SET_MESSAGE_STREAMING', chatId, messageId, isStreaming });
   };
 
   const setBackendChatId = (chatId: string, backendChatId: string) => {
     dispatch({ type: 'SET_BACKEND_CHAT_ID', chatId, backendChatId });
+  };
+
+  const setResearchModeUsed = (chatId: string) => {
+    dispatch({ type: 'SET_RESEARCH_MODE_USED', chatId });
   };
 
   const value: ChatContextType = {
@@ -571,8 +671,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     deleteChat,
     sendMessage,
     addAIMessage,
-    addQuizMessage,
+    setMessageStreaming,
+    setCurrentlyGenerating,
     setBackendChatId,
+    setResearchModeUsed,
     setTheme,
     toggleSidebar,
     setDashboard,

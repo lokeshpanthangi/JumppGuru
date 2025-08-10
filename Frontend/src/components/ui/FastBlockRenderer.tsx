@@ -5,18 +5,18 @@ import { YouTubeCards, parseYouTubeCards } from './YouTubeCards';
 // Configure marked for better rendering
 marked.setOptions({
   breaks: true,
-  gfm: true,
-  headerIds: false,
-  mangle: false
+  gfm: true
 });
 
 interface Block {
   type: 'text' | 'image';
   content?: string;
-  data_url?: string;
+  data_url?: string; // Legacy base64 format
+  image_url?: string; // New S3 URL format
   alt?: string;
   images?: Array<{
     data_url?: string;
+    image_url?: string;
     url?: string;
     src?: string;
     base64?: string;
@@ -113,14 +113,15 @@ export const FastBlockRenderer: React.FC<FastBlockRendererProps> = ({ content, c
               return (
                 <div key={index} style={{ marginBottom: '20px' }}>
                   {block.images.map((img, imgIndex) => {
-                    const src = img.data_url || img.url || img.src || img.base64 || img.data;
+                    // Prioritize image_url (S3 URL) over other formats
+                    const src = img.image_url || img.data_url || img.url || img.src || img.base64 || img.data;
                     if (!src) return null;
                     
                     return (
                       <img
                         key={imgIndex}
                         src={src}
-                        alt={block.alt || ''}
+                        alt={block.alt || 'Generated illustration'}
                         style={{ 
                           maxWidth: '50%', 
                           margin: '10px 0',
@@ -136,14 +137,14 @@ export const FastBlockRenderer: React.FC<FastBlockRendererProps> = ({ content, c
               );
             }
             
-            // Handle single image
-            const src = block.data_url;
+            // Handle single image - prioritize image_url (S3 URL) over data_url (base64)
+            const src = block.image_url || block.data_url;
             if (src) {
               return (
                 <img
                   key={index}
                   src={src}
-                  alt={block.alt || ''}
+                  alt={block.alt || 'Generated illustration'}
                   style={{ 
                     maxWidth: '50%', 
                     margin: '10px 0',

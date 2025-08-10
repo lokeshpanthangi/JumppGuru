@@ -12,10 +12,42 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
   const { state, sendMessage, setMode, toggleAurora, toggleLiveMode, addAIMessage } = useChatContext();
   const [message, setMessage] = useState('');
   const [isFocused, setIsFocused] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
   const [showModeDropdown, setShowModeDropdown] = useState(false);
+  const [showNotification, setShowNotification] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Auto-resize textarea function
+  const autoResizeTextarea = () => {
+    if (inputRef.current) {
+      // Reset height to auto to get the correct scrollHeight
+      inputRef.current.style.height = 'auto';
+      
+      // Calculate the new height based on content
+      const scrollHeight = inputRef.current.scrollHeight;
+      const minHeight = centered ? 36 : 24; // min-h-[36px] or min-h-[24px]
+      const maxHeight = centered ? 120 : 80; // Reduced max height for better UX
+      
+      // Set the height, but don't exceed maxHeight
+      const newHeight = Math.min(Math.max(scrollHeight, minHeight), maxHeight);
+      inputRef.current.style.height = `${newHeight}px`;
+    }
+  };
+
+  // Auto-resize on message change
+  useEffect(() => {
+    autoResizeTextarea();
+  }, [message, centered]);
+
+  // Check if current chat has used research mode
+  const hasUsedResearchMode = state.currentChat?.hasUsedResearchMode || false;
+
+  // If current mode is research but it's already been used, switch to null
+  useEffect(() => {
+    if (state.currentMode === 'research' && hasUsedResearchMode) {
+      setMode(null);
+    }
+  }, [hasUsedResearchMode, state.currentMode, setMode]);
 
   // LiveKit integration
   const liveKit = useLiveKit({
@@ -49,6 +81,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
 
     const messageToSend = message.trim();
     setMessage('');
+    
+    // Reset textarea height after clearing message
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.style.height = 'auto';
+        autoResizeTextarea();
+      }
+    }, 0);
+    
     await sendMessage(messageToSend, state.currentMode);
     onMessageSent?.();
     
@@ -89,6 +130,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
   };
 
   const handleModeSelect = (mode: ChatMode) => {
+    // Check if trying to select research mode when it's already used
+    if (mode === 'research' && hasUsedResearchMode) {
+      setShowNotification(true);
+      setTimeout(() => setShowNotification(false), 3000);
+      setShowModeDropdown(false);
+      return;
+    }
+
     if (state.currentMode === mode) {
       setMode(null);
     } else {
@@ -118,43 +167,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
   const ModeIcon = getModeIcon();
 
   return (
-    <div className={`relative ${centered ? 'w-full max-w-4xl mx-auto' : 'w-full'}`}>
-      {/* Live Mode Status */}
-      {state.isLiveMode && (
-        <div className="mb-3 p-3 bg-surface-elevated border border-brand-primary rounded-lg">
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${
-              liveKit.state.isStreaming ? 'bg-green-500 animate-pulse' : 
-              liveKit.state.isConnected ? 'bg-blue-500' : 'bg-yellow-500'
-            }`} />
-            <span className="text-sm font-medium text-text-primary">
-              {liveKit.state.isStreaming ? '🎤 Live Connection Active' : 
-               liveKit.state.isConnected ? '🔗 Connected to LiveKit' : 
-               '⏳ Connecting...'}
-            </span>
-          </div>
-          {liveKit.state.status && (
-            <p className="text-xs text-text-muted mt-1">{liveKit.state.status}</p>
-          )}
-          {liveKit.state.error && (
-            <p className="text-xs text-red-500 mt-1">{liveKit.state.error}</p>
-          )}
-        </div>
-      )}
-      
+    <div className={`relative ${centered ? 'w-full max-w-2xl mx-auto' : 'w-[calc(100%-32px)] mx-auto'}`}>
       <form onSubmit={handleSubmit} className="relative">
         <div 
-          className={`relative flex items-center gap-3 rounded-3xl transition-all duration-300 ease-out transform backdrop-blur-md ${
-            centered ? 'p-4' : 'p-3'
+          className={`relative flex items-end gap-3 rounded-3xl transition-all duration-200 ease-out transform backdrop-blur-md ${
+            centered ? 'px-3 py-2.5' : 'px-2 py-1.5'
           } ${
             isFocused
               ? 'bg-[hsl(var(--input-field-bg)/0.95)] border-2 border-brand-primary scale-[1.02]'
-              : isHovered
-              ? 'bg-[hsl(var(--input-field-bg)/0.90)] border border-input-border scale-[1.01]'
               : 'bg-[hsl(var(--input-field-bg)/0.85)] border border-input-border/50 scale-100'
           }`}
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
+          style={{
+            position: 'relative',
+            transformOrigin: 'bottom center'
+          }}
         >
           {/* Left Buttons */}
           <div className="flex items-center gap-2">
@@ -200,12 +226,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
                   <button
                     type="button"
                     onClick={() => handleModeSelect('research')}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-button-secondary transition-colors ${
+                    disabled={hasUsedResearchMode}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${
+                      hasUsedResearchMode 
+                        ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-700' 
+                        : 'hover:bg-button-secondary'
+                    } ${
                       state.currentMode === 'research' ? 'bg-sidebar-item-active' : ''
                     }`}
                   >
-                    <Globe className="w-4 h-4 text-brand-primary" />
-                    <span className="text-sm text-text-primary">Research</span>
+                    <Globe className={`w-4 h-4 ${hasUsedResearchMode ? 'text-gray-400' : 'text-brand-primary'}`} />
+                    <span className={`text-sm ${hasUsedResearchMode ? 'text-gray-400' : 'text-text-primary'}`}>
+                      Research {hasUsedResearchMode ? '(Used)' : ''}
+                    </span>
                   </button>
                 </div>
               )}
@@ -217,18 +250,28 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
             <textarea
               ref={inputRef}
               value={message}
-              onChange={(e) => setMessage(e.target.value)}
+              onChange={(e) => {
+                setMessage(e.target.value);
+                // Trigger auto-resize after state update
+                setTimeout(autoResizeTextarea, 0);
+              }}
               onKeyDown={handleKeyDown}
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
-              placeholder="Type your message..."
-              className={`w-full bg-transparent text-text-primary placeholder:text-text-muted resize-none outline-none overflow-y-auto scrollbar-thin transition-all duration-300 ease-out ${
-                centered ? 'min-h-[36px] max-h-48 text-lg leading-relaxed py-2' : 'min-h-[24px] max-h-32 leading-6 py-1'
+              placeholder="Let's make it work"
+              className={`w-full bg-transparent text-text-primary placeholder:text-text-muted resize-none outline-none overflow-y-auto transition-all duration-200 ease-out scrollbar-hide ${
+                centered ? 'min-h-[36px] text-lg leading-relaxed py-1' : 'min-h-[24px] leading-6 py-0'
               } ${
                 isFocused ? 'transform scale-[1.01]' : ''
               }`}
               rows={1}
               disabled={state.isTyping}
+              style={{ 
+                height: 'auto',
+                overflowY: 'auto',
+                scrollbarWidth: 'none', /* Firefox */
+                msOverflowStyle: 'none' /* Internet Explorer and Edge */
+              }}
             />
           </div>
 
@@ -264,6 +307,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
           </button>
         </div>
       </form>
+
+      {/* Research Mode Limit Notification */}
+      {showNotification && (
+        <div className="fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg z-50 animate-fade-in">
+          Research limit reached. Try creating a new chat.
+        </div>
+      )}
     </div>
   );
 };

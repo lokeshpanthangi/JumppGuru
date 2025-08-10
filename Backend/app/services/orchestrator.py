@@ -1,6 +1,5 @@
 import os
 import re
-import json
 from dotenv import load_dotenv
 from app.models.schema import QueryRequest, QueryResponse, PageContent
 from app.utils.language_detect import detect_language
@@ -66,89 +65,11 @@ async def generate_llm_response(query: str, user_lang: str, history, additional_
     )
     return response.choices[0].message.content
 
-async def llm_orchestrator_decision(query: str, user_lang: str, history) -> dict:
-    """
-    NEW: LLM-based orchestrator that analyzes query and decides routing strategy.
-    Uses GPT-4o to intelligently determine the best approach for handling the query.
-    """
-    system_prompt = """
-You are an intelligent query orchestrator for an educational AI system.
-
-Analyze the user query and decide the best approach to answer it.
-
-AVAILABLE SOURCES:
-- direct_llm: Use OpenAI directly for greetings, general knowledge, creative tasks
-- rag: Search internal educational knowledge base for learning content
-- web: Search internet for current/specific information  
-- hybrid: Combine RAG + web for comprehensive answers
-
-RETURN ONLY VALID JSON:
-{
-  "intent": "greeting|question|educational|creative|conversational",
-  "complexity": "simple|medium|complex",
-  "sources": ["source1"],
-  "strategy": "quick_response|educational_detailed|research_based|conversational", 
-  "confidence": 0.8,
-  "reasoning": "brief explanation"
-}
-
-DECISION RULES:
-- Greetings (hi, hello, namaste) → direct_llm, quick_response
-- Educational topics (explain, teach, learn) → rag first, educational_detailed
-- Current events/people → web, research_based
-- Simple facts → rag first, then direct_llm
-- Creative requests → direct_llm, conversational
-- Math/science concepts → rag, educational_detailed
-
-Always return valid JSON. Be decisive and confident.
-"""
-    
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",  # Changed to match your existing model
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Query: {query}"}
-            ],
-            temperature=0.1,  # Low temperature for consistent routing decisions
-            max_tokens=200
-        )
-        
-        decision_text = response.choices[0].message.content.strip()
-        
-        # Parse JSON response
-        decision = json.loads(decision_text)
-        
-        # Validate required fields
-        required_fields = ["intent", "complexity", "sources", "strategy", "confidence"]
-        if all(field in decision for field in required_fields):
-            return decision
-        else:
-            raise ValueError("Missing required fields in orchestrator response")
-            
-    except Exception as e:
-        print(f"LLM Orchestrator failed: {e}")
-        # FALLBACK to old logic
-        return {
-            "intent": "question",
-            "complexity": "medium", 
-            "sources": ["rag", "web"] if not is_direct_answer(query) else ["direct_llm"],
-            "strategy": "research_based" if not is_direct_answer(query) else "quick_response",
-            "confidence": 0.5,
-            "reasoning": f"Fallback to regex-based routing due to LLM error: {str(e)}"
-        }
-
 async def handle_user_query(payload: QueryRequest) -> QueryResponse:
     """
-    ENHANCED: Main orchestrator function with intelligent LLM-based routing.
-    
-    Uses GPT-4o to analyze queries and decide optimal processing strategy:
-    - Direct LLM for greetings, general knowledge, creative tasks
-    - RAG search for educational content in knowledge base
-    - Web search for current events and specific information
-    - Hybrid approaches for comprehensive answers
-    
-    Falls back to regex-based routing if LLM orchestrator fails.
+    Handle user query asynchronously.
+
+    Decides direct answer via LLM or returns a placeholder for future RAG/Search functionality.
     """
     query = payload.query
     mode = payload.mode or "general"
@@ -208,8 +129,7 @@ async def handle_user_query(payload: QueryRequest) -> QueryResponse:
             "query": query,
             "response": script_text,
             "language": user_lang,
-            "source": source,
-#             "orchestrator_decision": decision  # NEW: Store LLM orchestrator decision for analytics
+            "source": source
         })
     except Exception as e:
         print(f"Failed to insert into MongoDB: {e}")

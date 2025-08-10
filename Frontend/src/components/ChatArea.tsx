@@ -6,7 +6,10 @@ import { TypingAnimation } from './ui/typing-animation';
 import { LoadingState } from './ui/LoadingState';
 import { MarkdownRenderer } from './ui/MarkdownRenderer';
 import { FastBlockRenderer } from './ui/FastBlockRenderer';
+import { StreamingMessage } from './ui/StreamingMessage';
+import { PlainTextRenderer } from './ui/PlainTextRenderer';
 import { QuizModal } from './ui/QuizModal';
+import { QuizDisplayModal } from './ui/QuizDisplayModal';
 import { Renderer, Program, Mesh, Color, Triangle } from 'ogl';
 
 const VERT = `#version 300 es
@@ -251,93 +254,8 @@ const formatMessageTime = (date: Date | string): string => {
   });
 };
 
-interface QuizQuestion {
-  question: string;
-  options: {
-    A: string;
-    B: string;
-    C: string;
-    D: string;
-  };
-  correct: string;
-  explanation: string;
-}
-
-interface QuizMessageProps {
-  question: QuizQuestion;
-  timestamp: Date;
-}
-
-const QuizMessage: React.FC<QuizMessageProps> = ({ question, timestamp }) => {
-  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
-  const [showExplanation, setShowExplanation] = useState(false);
-
-  const handleAnswerSelect = (option: string) => {
-    setSelectedAnswer(option);
-    setShowExplanation(true);
-    console.log('Selected:', option, 'Correct:', question.correct, 'Match:', option === question.correct);
-  };
-
-  const isCorrect = selectedAnswer === question.correct;
-
-  return (
-    <div className="space-y-3 group relative max-w-[120%]">
-      <div className="bg-blue-50 dark:bg-gray-800/50 border border-blue-200 dark:border-gray-600 rounded-lg p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Brain className="w-5 h-5 text-blue-600 dark:text-gray-400" />
-          <span className="font-semibold text-blue-800 dark:text-gray-300">Quiz Question</span>
-        </div>
-        
-        <h3 className="text-lg font-medium text-text-primary mb-4">{question.question}</h3>
-        
-        <div className="space-y-2 mb-4">
-          {Object.entries(question.options).map(([key, value]) => (
-            <button
-              key={key}
-              onClick={() => handleAnswerSelect(key)}
-              disabled={selectedAnswer !== null}
-              className={`w-full text-left p-3 rounded-lg border transition-all ${
-                selectedAnswer === null
-                  ? 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-gray-500 hover:bg-blue-50 dark:hover:bg-gray-700/30'
-                  : selectedAnswer === key
-                  ? key === question.correct
-                    ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300'
-                    : 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300'
-                  : key === question.correct
-                  ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300'
-                  : 'border-gray-200 dark:border-gray-700 opacity-50'
-              }`}
-            >
-              <span className="font-medium">{key}.</span> {value}
-            </button>
-          ))}
-        </div>
-        
-        {showExplanation && (
-          <div className={`p-3 rounded-lg ${
-            isCorrect 
-              ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
-              : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
-          }`}>
-            <div className="flex items-center gap-2 mb-2">
-              {isCorrect ? (
-                <span className="text-green-600 dark:text-green-400 font-semibold">✓ Correct!</span>
-              ) : (
-                <span className="text-red-600 dark:text-red-400 font-semibold">✗ Incorrect</span>
-              )}
-            </div>
-            <p className="text-sm text-text-secondary">
-              <strong>Explanation:</strong> {question.explanation}
-            </p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
 export const ChatArea: React.FC = () => {
-  const { state, addQuizMessage, addAIMessage } = useChatContext();
+  const { state, addAIMessage } = useChatContext();
   const [showCenteredInput, setShowCenteredInput] = useState(true);
   const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
@@ -346,6 +264,8 @@ export const ChatArea: React.FC = () => {
   const [playingVoice, setPlayingVoice] = useState<string | null>(null);
   const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
   const [isQuizModalOpen, setIsQuizModalOpen] = useState(false);
+  const [isQuizDisplayOpen, setIsQuizDisplayOpen] = useState(false);
+  const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -502,14 +422,13 @@ export const ChatArea: React.FC = () => {
         const quizQuestions = data.mcqs.map((mcq: any) => ({
           question: mcq.question,
           options: mcq.options,
-          correct: mcq.correct_answer,
+          answer: mcq.answer, // Fixed: backend returns 'answer', not 'correct_answer'
           explanation: mcq.explanation || 'No explanation provided'
         }));
         
-        // Add each quiz question as a separate message
-        quizQuestions.forEach((quiz: any) => {
-          addQuizMessage(JSON.stringify(quiz));
-        });
+        // Store quiz questions and open display modal
+        setQuizQuestions(quizQuestions);
+        setIsQuizDisplayOpen(true);
         
         setNotification(`Generated ${quizQuestions.length} quiz questions!`);
         setTimeout(() => setNotification(null), 3000);
@@ -609,11 +528,6 @@ export const ChatArea: React.FC = () => {
                         {formatMessageTime(message.timestamp)}
                       </div>
                     </div>
-                  ) : message.type === 'quiz' ? (
-                    <QuizMessage 
-                      question={JSON.parse(message.content)} 
-                      timestamp={message.timestamp}
-                    />
                   ) : (
                     <div 
                       className="space-y-3 group relative"
@@ -630,7 +544,21 @@ export const ChatArea: React.FC = () => {
                         </span>
                       </div>
                       <div className="prose max-w-none">
-                        {message.content.includes('<BLOCKS_DATA>') ? (
+                        {message.type === 'ai' && message.isCurrentlyGenerating && message.mode !== 'research' ? (
+                          <StreamingMessage 
+                            content={message.content}
+                            messageId={message.id}
+                            chatId={state.currentChatId!}
+                          >
+                            {(displayedContent) => 
+                              displayedContent.includes('<BLOCKS_DATA>') ? (
+                                <FastBlockRenderer content={displayedContent} />
+                              ) : (
+                                <PlainTextRenderer content={displayedContent} />
+                              )
+                            }
+                          </StreamingMessage>
+                        ) : message.content.includes('<BLOCKS_DATA>') ? (
                           <FastBlockRenderer content={message.content} />
                         ) : (
                           <MarkdownRenderer content={message.content} />
@@ -686,19 +614,21 @@ export const ChatArea: React.FC = () => {
                           </button>
                         </div>
                         
-                        {/* Generate Quiz Button - Moved to the right */}
-                        <button
-                          onClick={handleOpenQuizModal}
-                          disabled={isGeneratingQuiz}
-                          className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 ${
-                            isGeneratingQuiz 
-                              ? 'bg-purple-100 dark:bg-purple-900/20 text-purple-600 cursor-not-allowed' 
-                              : 'bg-purple-500 hover:bg-purple-600 text-white shadow-md hover:shadow-lg'
-                          }`}
-                        >
-                          <Brain className={`w-4 h-4 ${isGeneratingQuiz ? 'animate-pulse' : ''}`} />
-                          {isGeneratingQuiz ? 'Generating...' : 'Generate Quiz'}
-                        </button>
+                        {/* Generate Quiz Button - Only show for individual research mode responses */}
+                        {message.type === 'ai' && message.mode === 'research' && (
+                          <button
+                            onClick={handleOpenQuizModal}
+                            disabled={isGeneratingQuiz}
+                            className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 ${
+                              isGeneratingQuiz 
+                                ? 'bg-purple-100 dark:bg-purple-900/20 text-purple-600 cursor-not-allowed' 
+                                : 'bg-purple-500 hover:bg-purple-600 text-white shadow-md hover:shadow-lg'
+                            }`}
+                          >
+                            <Brain className={`w-4 h-4 ${isGeneratingQuiz ? 'animate-pulse' : ''}`} />
+                            {isGeneratingQuiz ? 'Generating...' : 'Generate Quiz'}
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}
@@ -746,6 +676,13 @@ export const ChatArea: React.FC = () => {
         onClose={handleCloseQuizModal}
         onGenerate={handleGenerateQuiz}
         isGenerating={isGeneratingQuiz}
+      />
+      
+      {/* Quiz Display Modal */}
+      <QuizDisplayModal
+        isOpen={isQuizDisplayOpen}
+        onClose={() => setIsQuizDisplayOpen(false)}
+        questions={quizQuestions}
       />
     </div>
   );
