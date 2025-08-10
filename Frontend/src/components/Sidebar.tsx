@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { 
   MessageSquarePlus, 
+  MessageSquare,
   Grid3X3, 
   Trash2, 
   Settings, 
@@ -210,8 +211,9 @@ export const Sidebar: React.FC = () => {
                       title={state.sidebarCollapsed ? chat.title : ''}
                     >
                       {state.sidebarCollapsed ? (
-                        <div className="flex justify-center">
-                          <Menu className="w-4 h-4 text-text-secondary" />
+                        <div className="flex flex-col items-center gap-1">
+                          <MessageSquare className="w-4 h-4 text-text-secondary" />
+                          <div className="w-1 h-1 rounded-full bg-brand-primary" />
                         </div>
                       ) : (
                         <div className="flex items-start justify-between">

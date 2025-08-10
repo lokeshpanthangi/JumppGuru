@@ -471,7 +471,7 @@ export const ChatArea: React.FC = () => {
     setIsGeneratingQuiz(true);
     try {
       const HARDCODED_USER_ID = 'frontend-user-12345';
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
+      const backendUrl = import.meta.env.VITE_BACKEND_URL;
       
       const requestBody = {
         user_id: HARDCODED_USER_ID,
@@ -552,7 +552,7 @@ export const ChatArea: React.FC = () => {
       
       {/* Notification */}
       {notification && (
-        <div className="fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50 animate-fade-in">
+        <div className="fixed top-4 right-4 bg-brand-primary text-white px-4 py-2 rounded-lg shadow-lg z-50 animate-fade-in">
           {notification}
         </div>
       )}
@@ -590,14 +590,14 @@ export const ChatArea: React.FC = () => {
                 <div
                   className={`max-w-[80%] ${
                     message.type === 'user'
-                      ? 'bg-chat-message-user text-white rounded-2xl rounded-br-md px-4 py-3'
+                      ? 'bg-[hsl(var(--message-user-bg))] text-text-primary border border-input-border rounded-2xl rounded-br-md px-4 py-3'
                       : 'bg-transparent text-text-primary'
                   }`}
                 >
                   {message.type === 'user' ? (
                     <div>
                       {message.mode && (
-                        <div className="flex items-center gap-2 mb-2 text-white/80 text-sm">
+                        <div className="flex items-center gap-2 mb-2 text-text-secondary text-sm">
                           {getModeIcon(message.mode)}
                           <span>
                             {message.mode === 'web' ? 'Web Search' : 'Research'}
@@ -605,7 +605,7 @@ export const ChatArea: React.FC = () => {
                         </div>
                       )}
                       <p className="whitespace-pre-wrap">{message.content}</p>
-                      <div className="text-xs text-white/70 mt-2">
+                      <div className="text-xs text-text-muted mt-2">
                         {formatMessageTime(message.timestamp)}
                       </div>
                     </div>
@@ -638,62 +638,66 @@ export const ChatArea: React.FC = () => {
                       </div>
                       
                       {/* Action Buttons - Always reserve space but only visible on hover */}
-                      <div className="flex items-center gap-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                        <button
-                          onClick={() => handleCopyMessage(message.content)}
-                          className="p-2 rounded-lg hover:bg-button-secondary transition-colors duration-200 text-text-muted hover:text-text-primary"
-                          title="Copy"
-                        >
-                          <Copy className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleLikeMessage(message.id)}
-                          className={`p-2 rounded-lg hover:bg-button-secondary transition-colors duration-200 ${
-                            likedMessages.has(message.id) 
-                              ? 'text-green-500 bg-green-100 dark:bg-green-900/20' 
-                              : 'text-text-muted hover:text-green-500'
-                          }`}
-                          title={likedMessages.has(message.id) ? 'Unlike' : 'Like'}
-                        >
-                          <ThumbsUp className={`w-4 h-4 ${likedMessages.has(message.id) ? 'fill-current' : ''}`} />
-                        </button>
-                        <button
-                          onClick={() => handleDislikeMessage(message.id)}
-                          className={`p-2 rounded-lg hover:bg-button-secondary transition-colors duration-200 ${
-                            dislikedMessages.has(message.id) 
-                              ? 'text-red-500 bg-red-100 dark:bg-red-900/20' 
-                              : 'text-text-muted hover:text-red-500'
-                          }`}
-                          title={dislikedMessages.has(message.id) ? 'Remove dislike' : 'Dislike'}
-                        >
-                          <ThumbsDown className={`w-4 h-4 ${dislikedMessages.has(message.id) ? 'fill-current' : ''}`} />
-                        </button>
-                        <button
-                          onClick={() => handleSpeakMessage(message.content, message.id)}
-                          className={`p-2 rounded-lg hover:bg-button-secondary transition-colors duration-200 ${
-                            playingVoice === message.id 
-                              ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/20' 
-                              : 'text-text-muted hover:text-blue-500'
-                          }`}
-                          title={playingVoice === message.id ? 'Stop reading' : 'Read aloud'}
-                        >
-                          {playingVoice === message.id ? (
-                            <VolumeX className="w-4 h-4 animate-pulse" />
-                          ) : (
-                            <Volume2 className="w-4 h-4" />
-                          )}
-                        </button>
+                      <div className="flex items-center justify-between mt-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleCopyMessage(message.content)}
+                            className="p-2 rounded-lg hover:bg-button-secondary transition-colors duration-200 text-text-muted hover:text-text-primary"
+                            title="Copy"
+                          >
+                            <Copy className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleLikeMessage(message.id)}
+                            className={`p-2 rounded-lg hover:bg-button-secondary transition-colors duration-200 ${
+                              likedMessages.has(message.id) 
+                                ? 'text-green-500 bg-green-100 dark:bg-green-900/20' 
+                                : 'text-text-muted hover:text-green-500'
+                            }`}
+                            title={likedMessages.has(message.id) ? 'Unlike' : 'Like'}
+                          >
+                            <ThumbsUp className={`w-4 h-4 ${likedMessages.has(message.id) ? 'fill-current' : ''}`} />
+                          </button>
+                          <button
+                            onClick={() => handleDislikeMessage(message.id)}
+                            className={`p-2 rounded-lg hover:bg-button-secondary transition-colors duration-200 ${
+                              dislikedMessages.has(message.id) 
+                                ? 'text-red-500 bg-red-100 dark:bg-red-900/20' 
+                                : 'text-text-muted hover:text-red-500'
+                            }`}
+                            title={dislikedMessages.has(message.id) ? 'Remove dislike' : 'Dislike'}
+                          >
+                            <ThumbsDown className={`w-4 h-4 ${dislikedMessages.has(message.id) ? 'fill-current' : ''}`} />
+                          </button>
+                          <button
+                            onClick={() => handleSpeakMessage(message.content, message.id)}
+                            className={`p-2 rounded-lg hover:bg-button-secondary transition-colors duration-200 ${
+                              playingVoice === message.id 
+                                ? 'text-blue-500 bg-blue-100 dark:bg-blue-900/20' 
+                                : 'text-text-muted hover:text-blue-500'
+                            }`}
+                            title={playingVoice === message.id ? 'Stop reading' : 'Read aloud'}
+                          >
+                            {playingVoice === message.id ? (
+                              <VolumeX className="w-4 h-4 animate-pulse" />
+                            ) : (
+                              <Volume2 className="w-4 h-4" />
+                            )}
+                          </button>
+                        </div>
+                        
+                        {/* Generate Quiz Button - Moved to the right */}
                         <button
                           onClick={handleOpenQuizModal}
                           disabled={isGeneratingQuiz}
-                          className={`p-2 rounded-lg hover:bg-button-secondary transition-colors duration-200 ${
+                          className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 ${
                             isGeneratingQuiz 
-                              ? 'text-purple-500 bg-purple-100 dark:bg-purple-900/20 cursor-not-allowed' 
-                              : 'text-text-muted hover:text-purple-500'
+                              ? 'bg-purple-100 dark:bg-purple-900/20 text-purple-600 cursor-not-allowed' 
+                              : 'bg-purple-500 hover:bg-purple-600 text-white shadow-md hover:shadow-lg'
                           }`}
-                          title={isGeneratingQuiz ? 'Generating quiz...' : 'Generate quiz from conversation'}
                         >
                           <Brain className={`w-4 h-4 ${isGeneratingQuiz ? 'animate-pulse' : ''}`} />
+                          {isGeneratingQuiz ? 'Generating...' : 'Generate Quiz'}
                         </button>
                       </div>
                     </div>

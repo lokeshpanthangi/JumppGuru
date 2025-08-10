@@ -290,144 +290,193 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     const aiMessageId = `msg-${Date.now()}-ai`;
 
     try {
-      // Sequential loading states with 3-second intervals
-      const loadingStates = [
-        'Generating content...',
-        'Generating images...',
-        'Finding related videos...'
-      ];
+      // Only proceed with GenAI and YouTube API calls if mode is 'research'
+      if (mode === 'research') {
+        // Sequential loading states with 3-second intervals
+        const loadingStates = [
+          'Generating content...',
+          'Generating images...',
+          'Finding related videos...'
+        ];
 
-      // Show loading states sequentially
-      for (let i = 0; i < loadingStates.length; i++) {
-        dispatch({ type: 'SET_LOADING_STATE', loadingState: loadingStates[i] });
-        await new Promise(resolve => setTimeout(resolve, 3000));
-      }
-
-      // Start both API calls in parallel
-      const genaiPromise = fetch(`${BACKEND_URL}/genai/generate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_id: HARDCODED_USER_ID,
-          query: content.trim(),
-          lang: 'auto',
-          max_images: 3
-        })
-      }).then(res => {
-        if (!res.ok) throw new Error(`GenAI API failed: ${res.status}`);
-        return res.json();
-      });
-
-      const youtubePromise = fetch(`${BACKEND_URL}/youtube/recommend?q=${encodeURIComponent(content.trim())}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
+        // Show loading states sequentially
+        for (let i = 0; i < loadingStates.length; i++) {
+          dispatch({ type: 'SET_LOADING_STATE', loadingState: loadingStates[i] });
+          await new Promise(resolve => setTimeout(resolve, 3000));
         }
-      }).then(res => {
-        if (!res.ok) throw new Error(`YouTube API failed: ${res.status}`);
-        return res.json();
-      });
 
-      // Wait for GenAI response first
-      const genaiResponse = await genaiPromise.catch(error => ({ error }));
-      console.log('🔍 Full GenAI Response:', genaiResponse);
-      
-      // Extract chat_id from GenAI response
-      let backendChatId = null;
-      if (genaiResponse && genaiResponse.chat_id) {
-        backendChatId = genaiResponse.chat_id;
-        console.log('✅ Backend chat_id extracted:', backendChatId);
-        // Store the backend chat_id in the current chat
-        dispatch({ type: 'SET_BACKEND_CHAT_ID', chatId, backendChatId });
+        // Start both API calls in parallel
+        const genaiPromise = fetch(`${BACKEND_URL}/genai/generate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            user_id: HARDCODED_USER_ID,
+            query: content.trim(),
+            lang: 'auto',
+            max_images: 3
+          })
+        }).then(res => {
+          if (!res.ok) throw new Error(`GenAI API failed: ${res.status}`);
+          return res.json();
+        });
+
+        const youtubePromise = fetch(`${BACKEND_URL}/youtube/recommend?q=${encodeURIComponent(content.trim())}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }).then(res => {
+          if (!res.ok) throw new Error(`YouTube API failed: ${res.status}`);
+          return res.json();
+        });
+
+        // Wait for GenAI response first
+        const genaiResponse = await genaiPromise.catch(error => ({ error }));
+        console.log('🔍 Full GenAI Response:', genaiResponse);
+        
+        // Extract chat_id from GenAI response
+        let backendChatId = null;
+        if (genaiResponse && genaiResponse.chat_id) {
+          backendChatId = genaiResponse.chat_id;
+          console.log('✅ Backend chat_id extracted:', backendChatId);
+          // Store the backend chat_id in the current chat
+          dispatch({ type: 'SET_BACKEND_CHAT_ID', chatId, backendChatId });
+        } else {
+          console.log('❌ No chat_id found in GenAI response');
+          console.log('GenAI response keys:', Object.keys(genaiResponse || {}));
+        }
+        
+        // Process and display GenAI content immediately using fast block rendering
+        let genaiContent = '';
+        if (genaiResponse.error) {
+          console.error('GenAI API Error:', genaiResponse.error);
+          genaiContent = '⚠️ Tutorial content temporarily unavailable.';
+        } else if (genaiResponse.blocks && Array.isArray(genaiResponse.blocks)) {
+          // Store blocks as JSON for fast rendering instead of converting to markdown
+          genaiContent = `<BLOCKS_DATA>${JSON.stringify(genaiResponse.blocks)}</BLOCKS_DATA>`;
+        }
+
+        // Add GenAI message first
+        const genaiMessage: Message = {
+          id: aiMessageId,
+          content: genaiContent,
+          type: 'ai',
+          timestamp: new Date(),
+        };
+        dispatch({ type: 'ADD_MESSAGE', chatId, message: genaiMessage });
+
+        // Wait for YouTube response and update the existing message
+        const youtubeResponse = await youtubePromise.catch(error => ({ error }));
+        console.log('🎥 Full YouTube Response:', youtubeResponse);
+        
+        // Call YouTube update API if we have both chat_id and YouTube videos
+        console.log('🔄 Checking conditions for update API call:');
+        console.log('- backendChatId:', backendChatId);
+        console.log('- youtubeResponse.videos exists:', !!youtubeResponse.videos);
+        console.log('- youtubeResponse.videos is array:', Array.isArray(youtubeResponse.videos));
+        
+        console.log('Calling YouTube update API1...',backendChatId,youtubeResponse);
+        if (backendChatId && youtubeResponse.videos && Array.isArray(youtubeResponse.videos)) {
+          console.log('Calling YouTube update API2...');
+          try {
+            const updateResponse = await fetch(`${BACKEND_URL}/youtube/update_youtube_links`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                chat_id: backendChatId,
+                videos: youtubeResponse.videos
+              })
+            });
+            
+            console.log('📡 Update API Response Status:', updateResponse.status);
+            const responseData = await updateResponse.json();
+            console.log('📡 Update API Response Data:', responseData);
+            
+            if (updateResponse.ok) {
+              console.log('✅ YouTube links successfully stored in database');
+            } else {
+              console.error('❌ Failed to update YouTube links:', updateResponse.status);
+            }
+          } catch (error) {
+            console.error('💥 Error calling YouTube update API:', error);
+          }
+        } else {
+          console.log('⚠️ Skipping update API call - conditions not met');
+        }
+        
+        let youtubeContent = '';
+        if (youtubeResponse.error) {
+          console.error('YouTube API Error:', youtubeResponse.error);
+          youtubeContent = '\n\n## 📺 Related Videos\n\n⚠️ Video recommendations temporarily unavailable.';
+        } else if (youtubeResponse.videos && Array.isArray(youtubeResponse.videos)) {
+          // Show only first 3 videos by default
+          const limitedVideos = youtubeResponse.videos.slice(0, 3);
+          const remainingVideos = youtubeResponse.videos.slice(3);
+          
+          youtubeContent = `\n\n<youtube-cards>${JSON.stringify({
+            videos: limitedVideos,
+            remainingVideos: remainingVideos
+          })}</youtube-cards>`;
+        }
+
+        // Update the existing message with YouTube content (no duplicate message)
+        dispatch({ 
+          type: 'UPDATE_MESSAGE', 
+          chatId, 
+          messageId: aiMessageId,
+          content: genaiContent + youtubeContent
+        });
       } else {
-        console.log('❌ No chat_id found in GenAI response');
-        console.log('GenAI response keys:', Object.keys(genaiResponse || {}));
-      }
-      
-      // Process and display GenAI content immediately using fast block rendering
-      let genaiContent = '';
-      if (genaiResponse.error) {
-        console.error('GenAI API Error:', genaiResponse.error);
-        genaiContent = '⚠️ Tutorial content temporarily unavailable.';
-      } else if (genaiResponse.blocks && Array.isArray(genaiResponse.blocks)) {
-        // Store blocks as JSON for fast rendering instead of converting to markdown
-        genaiContent = `<BLOCKS_DATA>${JSON.stringify(genaiResponse.blocks)}</BLOCKS_DATA>`;
-      }
-
-      // Add GenAI message first
-      const genaiMessage: Message = {
-        id: aiMessageId,
-        content: genaiContent,
-        type: 'ai',
-        timestamp: new Date(),
-      };
-      dispatch({ type: 'ADD_MESSAGE', chatId, message: genaiMessage });
-
-      // Wait for YouTube response and update the existing message
-      const youtubeResponse = await youtubePromise.catch(error => ({ error }));
-      console.log('🎥 Full YouTube Response:', youtubeResponse);
-      
-      // Call YouTube update API if we have both chat_id and YouTube videos
-      console.log('🔄 Checking conditions for update API call:');
-      console.log('- backendChatId:', backendChatId);
-      console.log('- youtubeResponse.videos exists:', !!youtubeResponse.videos);
-      console.log('- youtubeResponse.videos is array:', Array.isArray(youtubeResponse.videos));
-      
-      console.log('🚀 Calling YouTube update API1...',backendChatId,youtubeResponse);
-      if (backendChatId && youtubeResponse.videos && Array.isArray(youtubeResponse.videos)) {
-        console.log('🚀 Calling YouTube update API2...');
+        // For non-research modes, use the /api/query endpoint
         try {
-          const updateResponse = await fetch(`${BACKEND_URL}/youtube/update_youtube_links`, {
+          const queryResponse = await fetch(`${BACKEND_URL}/query`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              chat_id: backendChatId,
-              videos: youtubeResponse.videos
+              user_id: HARDCODED_USER_ID,
+              query: content.trim(),
+              mode: mode || 'general',
+              lang: 'auto'
             })
           });
-          
-          console.log('📡 Update API Response Status:', updateResponse.status);
-          const responseData = await updateResponse.json();
-          console.log('📡 Update API Response Data:', responseData);
-          
-          if (updateResponse.ok) {
-            console.log('✅ YouTube links successfully stored in database');
-          } else {
-            console.error('❌ Failed to update YouTube links:', updateResponse.status);
-          }
-        } catch (error) {
-          console.error('💥 Error calling YouTube update API:', error);
-        }
-      } else {
-        console.log('⚠️ Skipping update API call - conditions not met');
-      }
-      
-      let youtubeContent = '';
-      if (youtubeResponse.error) {
-        console.error('YouTube API Error:', youtubeResponse.error);
-        youtubeContent = '\n\n## 📺 Related Videos\n\n⚠️ Video recommendations temporarily unavailable.';
-      } else if (youtubeResponse.videos && Array.isArray(youtubeResponse.videos)) {
-        // Show only first 3 videos by default
-        const limitedVideos = youtubeResponse.videos.slice(0, 3);
-        const remainingVideos = youtubeResponse.videos.slice(3);
-        
-        youtubeContent = `\n\n<youtube-cards>${JSON.stringify({
-          videos: limitedVideos,
-          remainingVideos: remainingVideos
-        })}</youtube-cards>`;
-      }
 
-      // Update the existing message with YouTube content (no duplicate message)
-      dispatch({ 
-        type: 'UPDATE_MESSAGE', 
-        chatId, 
-        messageId: aiMessageId,
-        content: genaiContent + youtubeContent
-      });
+          if (!queryResponse.ok) {
+            throw new Error(`Query API failed: ${queryResponse.status}`);
+          }
+
+          const queryData = await queryResponse.json();
+          console.log('🔍 Query API Response:', queryData);
+
+          // Extract content from the response
+          let responseContent = 'No response received.';
+          if (queryData.lesson && queryData.lesson.length > 0 && queryData.lesson[0].script) {
+            responseContent = queryData.lesson[0].script;
+          }
+
+          const apiMessage: Message = {
+            id: aiMessageId,
+            content: responseContent,
+            type: 'ai',
+            timestamp: new Date(),
+          };
+          dispatch({ type: 'ADD_MESSAGE', chatId, message: apiMessage });
+        } catch (error) {
+          console.error('Query API Error:', error);
+          const errorMessage: Message = {
+            id: aiMessageId,
+            content: 'Sorry, I encountered an error while processing your request. Please make sure the backend server is running.',
+            type: 'ai',
+            timestamp: new Date(),
+          };
+          dispatch({ type: 'ADD_MESSAGE', chatId, message: errorMessage });
+        }
+      }
 
     } catch (error) {
       console.error('Backend API Error:', error);
