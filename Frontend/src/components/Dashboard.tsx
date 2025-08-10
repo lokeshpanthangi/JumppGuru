@@ -1,7 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, MessageSquare, Send, Calendar, Flame, TrendingUp, Clock, Users } from 'lucide-react';
 import { useChatContext } from '../contexts/ChatContext';
-import { Squares } from '../components/ui/squares-background';
+
+const FloatingOrb: React.FC<{ className?: string; delay?: number }> = ({ 
+  className = '', 
+  delay = 0 
+}) => (
+  <div 
+    className={`absolute rounded-full animate-float ${className}`}
+    style={{ animationDelay: `${delay}s` }}
+  />
+);
 
 export const Dashboard: React.FC = () => {
   const { state, setDashboard } = useChatContext();
@@ -100,19 +109,8 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div 
-      className="flex-1 transition-all duration-500 ease-in-out relative overflow-hidden"
+      className="flex-1 bg-chat-bg transition-all duration-500 ease-in-out relative"
     >
-      {/* Squares Background */}
-      <div className="absolute inset-0">
-        <Squares 
-          direction="diagonal"
-          speed={0.5}
-          squareSize={40}
-          borderColor="#333" 
-          hoverFillColor="#222"
-        />
-      </div>
-
       <div className="relative z-10 p-8">
         {/* Header */}
         <div className={`mb-8 ${mounted ? 'animate-fade-in-up' : 'opacity-0'}`}>
@@ -142,16 +140,16 @@ export const Dashboard: React.FC = () => {
           {stats.map((stat, index) => (
             <div
               key={stat.title}
-              className="bg-surface-elevated border border-input-border rounded-xl p-6 shadow-elevated hover:shadow-xl transition-all duration-normal"
+              className="bg-surface-elevated border border-input-border rounded-xl p-6 shadow-elevated hover:shadow-xl hover:border-brand-primary/20 transition-all duration-300 group cursor-pointer"
               style={{ animationDelay: `${0.1 + index * 0.1}s` }}
             >
               <div className="flex items-center justify-between mb-4">
-                <div className="p-2 rounded-lg bg-surface border border-input-border">
-                  <stat.icon className="w-5 h-5 text-brand-primary" />
+                <div className="p-3 rounded-lg bg-surface border border-input-border group-hover:border-brand-primary/30 group-hover:bg-brand-primary/5 transition-all duration-300">
+                  <stat.icon className="w-5 h-5 text-brand-primary group-hover:scale-110 transition-transform duration-300" />
                 </div>
-                <div className={`text-xs px-2 py-1 rounded-full ${
+                <div className={`text-xs px-2 py-1 rounded-full transition-all duration-300 ${
                   stat.changeType === 'positive' 
-                    ? 'bg-brand-primary/10 text-brand-primary' 
+                    ? 'bg-brand-primary/10 text-brand-primary group-hover:bg-brand-primary/20' 
                     : 'bg-button-secondary text-text-muted'
                 }`}>
                   {stat.change}
@@ -179,9 +177,9 @@ export const Dashboard: React.FC = () => {
             
             <div className="space-y-4">
               {recentActivity.map((activity, index) => (
-                <div key={index} className="flex items-center gap-4 p-3 rounded-lg hover:bg-button-secondary transition-colors duration-fast">
-                  <div className="w-10 h-10 bg-brand-primary/10 rounded-full flex items-center justify-center">
-                    <activity.icon className="w-4 h-4 text-brand-primary" />
+                <div key={index} className="flex items-center gap-4 p-3 rounded-lg hover:bg-button-secondary transition-all duration-300 group cursor-pointer">
+                  <div className="w-10 h-10 bg-brand-primary/10 rounded-full flex items-center justify-center group-hover:bg-brand-primary/20 transition-all duration-300">
+                    <activity.icon className="w-4 h-4 text-brand-primary group-hover:scale-110 transition-transform duration-300" />
                   </div>
                   <div className="flex-1">
                     <p className="text-sm font-medium text-text-primary">{activity.action}</p>
@@ -203,9 +201,9 @@ export const Dashboard: React.FC = () => {
             
             <div className="space-y-6">
               {insights.map((insight, index) => (
-                <div key={index} className="space-y-2">
+                <div key={index} className="space-y-2 p-3 rounded-lg hover:bg-button-secondary/50 transition-all duration-300 group cursor-pointer">
                   <div className="flex items-center gap-3">
-                    <insight.icon className="w-4 h-4 text-brand-primary" />
+                    <insight.icon className="w-4 h-4 text-brand-primary group-hover:scale-110 transition-transform duration-300" />
                     <h3 className="font-medium text-text-primary">{insight.title}</h3>
                   </div>
                   <p className="text-lg font-semibold text-text-primary ml-7">{insight.value}</p>
