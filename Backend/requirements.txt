@@ -10,3 +10,7 @@ pymongo
 requests
 google-generativeai
 bs4
+websockets
+sarvamai
+pillow
+boto3

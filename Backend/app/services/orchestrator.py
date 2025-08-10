@@ -8,8 +8,7 @@ from openai import OpenAI
 from app.db.mongodb import mongo_collection
 from app.services.vector_search import query_rag_chunks
 from app.services.web_fallback import web_fallback_answer
-from app.services.chat_history import save_message, get_recent_messages
-
+from app.services.chat_history import save_message, get_recent_messages, get_assistant_text_by_chat_id
 
 
 # Load environment variables from .env file, if present
@@ -32,7 +31,7 @@ def is_direct_answer(query: str) -> bool:
     return any(re.search(p, query.lower()) for p in patterns)
 
 
-async def generate_llm_response(query: str, user_lang: str, history) -> str:
+async def generate_llm_response(query: str, user_lang: str, history, additional_history) -> str:
     """
     Generate a chat completion response from OpenAI based on the query and language.
     Returns a short, friendly answer in Hinglish or English depending on user_lang.
@@ -56,7 +55,7 @@ async def generate_llm_response(query: str, user_lang: str, history) -> str:
         "Use conversational, easy-to-understand tone. Avoid technical jargon."
     ).format(**values)
 
-    messages = [{"role": "system", "content": system_prompt}] + [
+    messages = [{"role": "system", "content": system_prompt}] +  history + additional_history + [
         {"role": "user", "content": query}
     ]
 
@@ -155,74 +154,47 @@ async def handle_user_query(payload: QueryRequest) -> QueryResponse:
     mode = payload.mode or "general"
     user_lang = payload.lang or detect_language(query)
     user_id = payload.user_id  # NEW: we take user_id from request
+    chat_id = payload.chat_id or None
 
     if user_lang == "auto":
         user_lang = detect_language(query)
 
      # Retrieve chat history for context
     history = await get_recent_messages(user_id)
+    additional_history = await get_assistant_text_by_chat_id(chat_id) if chat_id else ""
 
-    # NEW: Get LLM orchestrator decision
-    decision = await llm_orchestrator_decision(query, user_lang, history)
-    
-    # Execute based on LLM orchestrator decision
-    script_text = ""
-    source = "Unknown"
-    
-    try:
-        if "direct_llm" in decision["sources"]:
-            script_text = await generate_llm_response(query, user_lang, history)
-            source = "LLM"
-            
-        elif "rag" in decision["sources"]:
-            chunks = await query_rag_chunks(query)
-            
-            if chunks:
-                # RAG found content
-                context = "\n".join([c["text"] for c in chunks])
-                prompt = f"Use the following context to provide a clear, educational answer:\n\nContext: {context}\n\nQuestion: {query}"
-                
-                messages = [
-                    {"role": "system", "content": "Use the context to provide clear, educational answers. Be helpful and informative."},
-                    *history,
-                    {"role": "user", "content": prompt}
-                ]
-                
-                response = client.chat.completions.create(
-                    model="gpt-4o-mini",  # Match existing model
-                    messages=messages,
-                    temperature=0.7
-                )
-                script_text = response.choices[0].message.content
-                source = "RAG"
-                
-            elif "web" in decision["sources"]:
-                # RAG failed, try web as backup
-                script_text = await web_fallback_answer(query, history)
-                source = "Web"
-            else:
-                # RAG failed, no web backup - use direct LLM
-                script_text = await generate_llm_response(query, user_lang, history)
-                source = "LLM-Fallback"
-                
-        elif "web" in decision["sources"]:
-            script_text = await web_fallback_answer(query, history)
-            source = "Web"
-        
-        else:
-            # Default fallback - should not reach here but just in case
-            script_text = await generate_llm_response(query, user_lang, history)
-            source = "LLM-Default"
-            
-    except Exception as e:
-        print(f"Execution error during orchestration: {e}")
-        # ULTIMATE FALLBACK: Use old logic
-        if is_direct_answer(query):
-            script_text = await generate_llm_response(query, user_lang, history)
-            source = "LLM-Emergency"
-        else:
-            script_text = "I'm having trouble processing your request right now. Please try again."
-            source = "Error"
+    # Decide between direct LLM answer or Search (future implementation)
+    # if is_direct_answer(query):
+    script_text = await generate_llm_response(query, user_lang, history, additional_history)
+    source = "LLM"
+    # else:
+    #     # Placeholder message for more complex queries requiring search
+    #     script_text = "This query requires search (RAG/Web), which is coming next."
+    #     source = "Search"
+
+    #     # BASIC RAG
+    #     chunks = await query_rag_chunks(query)
+
+    #     if chunks:
+    #         context = "\n".join([c["text"] for c in chunks])
+    #         prompt = f"""Use the following context to answer clearly:\n\n{context}\n\nQuestion: {query}"""
+    #         messages = [{"role": "system", "content": "Be clear, educational."}] + history + [
+    #             {"role": "user", "content": prompt}
+    #         ]
+
+    #         response = client.chat.completions.create(
+    #             model="gpt-4o-mini",
+    #             messages=messages
+    #         )
+
+    #         script_text = response.choices[0].message.content
+    #         source = "RAG"
+    #     else:
+    #         # script_text = "No educational content found. Web fallback not yet implemented."
+    #         # source = "RAG-Miss"
+    #         # Web fallback (if no good RAG chunks)
+    #         script_text = await web_fallback_answer(query, history)
+    #         source = "Web"
 
 
     # Save both user query & assistant reply in chat history
@@ -237,7 +209,7 @@ async def handle_user_query(payload: QueryRequest) -> QueryResponse:
             "response": script_text,
             "language": user_lang,
             "source": source,
-            "orchestrator_decision": decision  # NEW: Store LLM orchestrator decision for analytics
+#             "orchestrator_decision": decision  # NEW: Store LLM orchestrator decision for analytics
         })
     except Exception as e:
         print(f"Failed to insert into MongoDB: {e}")
