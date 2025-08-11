@@ -162,22 +162,22 @@ export const Sidebar: React.FC = () => {
         className={`h-full transition-all duration-sidebar ease-sidebar flex-shrink-0 border-r border-sidebar-border ${
           state.sidebarCollapsed 
             ? 'w-16 bg-chat-bg' 
-            : 'w-64 bg-sidebar-bg'
+            : 'w-80 bg-sidebar-bg'
         }`}
       >
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className={`transition-all duration-sidebar ease-sidebar ${state.sidebarCollapsed ? 'p-2' : 'p-4'}`}>
-            <div className={`flex items-center gap-2 transition-all duration-sidebar ease-sidebar ${state.sidebarCollapsed ? 'justify-center mb-6' : 'justify-between mb-6'}`}>
-              <div className="flex items-center gap-2">
+          <div className={`transition-all duration-sidebar ease-sidebar ${state.sidebarCollapsed ? 'p-3' : 'p-6'}`}>
+            <div className={`flex items-center gap-3 transition-all duration-sidebar ease-sidebar ${state.sidebarCollapsed ? 'justify-center mb-3' : 'justify-between mb-6'}`}>
+              <div className="flex items-center gap-3">
                 <div 
-                  className="w-6 h-6 rounded-md overflow-hidden flex items-center justify-center cursor-pointer"
+                  className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center cursor-pointer"
                   onClick={state.sidebarCollapsed ? toggleSidebar : undefined}
                 >
                   <img src="/logo.png" alt="JumpApp Logo" className="w-full h-full object-contain" />
                 </div>
                 {!state.sidebarCollapsed && (
-                  <h1 className="text-lg font-bold text-text-primary">JumpApp</h1>
+                  <h1 className="text-xl font-bold text-text-primary">JumpApp</h1>
                 )}
               </div>
               {!state.sidebarCollapsed && (
@@ -186,54 +186,54 @@ export const Sidebar: React.FC = () => {
                   className="p-1 hover:bg-button-secondary-hover rounded transition-colors duration-fast"
                   aria-label="Collapse sidebar"
                 >
-                  <ChevronLeft className="w-3.5 h-3.5 text-text-secondary" />
+                  <ChevronLeft className="w-4 h-4 text-text-secondary" />
                 </button>
               )}
             </div>
             
-            <div className="space-y-2">
+            <div className="space-y-3">
               <button
                 onClick={handleDashboard}
-                className={`w-full flex items-center transition-all duration-sidebar ease-sidebar ${state.sidebarCollapsed ? 'justify-center px-1.5 py-2' : 'gap-2 px-3 py-2'} rounded-lg text-left ${
+                className={`w-full flex items-center transition-all duration-sidebar ease-sidebar ${state.sidebarCollapsed ? 'justify-center px-2 py-3' : 'gap-3 px-4 py-3'} rounded-lg text-left ${
                   state.showDashboard && location.pathname === '/'
                     ? 'bg-[hsl(var(--input-mint-bg))] border border-[hsl(var(--input-mint-border))] shadow-[0_0_8px_hsl(var(--input-mint-glow))]'
                     : 'bg-button-secondary hover:bg-button-secondary-hover'
                 }`}
                 title={state.sidebarCollapsed ? 'Dashboard' : ''}
               >
-                <Grid3X3 className={`w-4 h-4 ${state.showDashboard && location.pathname === '/' ? 'text-brand-primary' : 'text-text-secondary'}`} />
+                <Grid3X3 className={`w-5 h-5 ${state.showDashboard && location.pathname === '/' ? 'text-brand-primary' : 'text-text-secondary'}`} />
                 {!state.sidebarCollapsed && (
-                  <span className={`text-sm font-medium ${state.showDashboard && location.pathname === '/' ? 'text-brand-primary' : 'text-text-primary'}`}>Dashboard</span>
+                  <span className={`font-medium ${state.showDashboard && location.pathname === '/' ? 'text-brand-primary' : 'text-text-primary'}`}>Dashboard</span>
                 )}
               </button>
               
               <Link
                 to="/deep-learning"
-                className={`w-full flex items-center transition-all duration-sidebar ease-sidebar ${state.sidebarCollapsed ? 'justify-center px-1.5 py-2' : 'gap-2 px-3 py-2'} rounded-lg text-left ${
+                className={`w-full flex items-center transition-all duration-sidebar ease-sidebar ${state.sidebarCollapsed ? 'justify-center px-2 py-3' : 'gap-3 px-4 py-3'} rounded-lg text-left ${
                   location.pathname === '/deep-learning'
                     ? 'bg-[hsl(var(--input-mint-bg))] border border-[hsl(var(--input-mint-border))] shadow-[0_0_8px_hsl(var(--input-mint-glow))]'
                     : 'bg-button-secondary hover:bg-button-secondary-hover'
                 }`}
                 title={state.sidebarCollapsed ? 'Deep Learning' : ''}
               >
-                <Brain className={`w-4 h-4 ${location.pathname === '/deep-learning' ? 'text-brand-primary' : 'text-text-secondary'}`} />
+                <Brain className={`w-5 h-5 ${location.pathname === '/deep-learning' ? 'text-brand-primary' : 'text-text-secondary'}`} />
                 {!state.sidebarCollapsed && (
-                  <span className={`text-sm font-medium ${location.pathname === '/deep-learning' ? 'text-brand-primary' : 'text-text-primary'}`}>Deep Learning</span>
+                  <span className={`font-medium ${location.pathname === '/deep-learning' ? 'text-brand-primary' : 'text-text-primary'}`}>Deep Learning</span>
                 )}
               </Link>
               
               <button
                 onClick={handleNewChat}
-                className={`w-full flex items-center transition-all duration-sidebar ease-sidebar ${state.sidebarCollapsed ? 'justify-center px-1.5 py-2' : 'gap-2 px-3 py-2'} rounded-lg ${
+                className={`w-full flex items-center transition-all duration-sidebar ease-sidebar ${state.sidebarCollapsed ? 'justify-center px-2 py-3' : 'gap-3 px-4 py-3'} rounded-lg ${
                   !state.showDashboard && !state.currentChatId
                     ? 'bg-brand-primary hover:bg-brand-primary-hover text-[hsl(var(--button-secondary))]'
                     : 'bg-brand-primary hover:bg-brand-primary-hover text-[hsl(var(--button-secondary))]'
                 }`}
                 title={state.sidebarCollapsed ? 'New Chat' : ''}
               >
-                <MessageSquarePlus className="w-4 h-4" />
+                <MessageSquarePlus className="w-5 h-5" />
                 {!state.sidebarCollapsed && (
-                  <span className="text-sm font-medium">New Chat</span>
+                  <span className="font-medium">New Chat</span>
                 )}
               </button>
             </div>
@@ -342,7 +342,7 @@ export const Sidebar: React.FC = () => {
                           setShowCreateUserModal(true);
                           setShowSettingsMenu(false);
                         }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-button-secondary transition-colors duration-fast"
+                        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-button-secondary transition-colors duration-fast"
                       >
                         <UserPlus className="w-4 h-4 text-text-secondary" />
                         <span className="text-sm text-text-primary">Create New User</span>
@@ -352,7 +352,7 @@ export const Sidebar: React.FC = () => {
                           setShowSwitchUserModal(true);
                           setShowSettingsMenu(false);
                         }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-button-secondary transition-colors duration-fast"
+                        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-button-secondary transition-colors duration-fast"
                       >
                         <Users className="w-4 h-4 text-text-secondary" />
                         <span className="text-sm text-text-primary">Switch User</span>

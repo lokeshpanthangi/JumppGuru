@@ -225,10 +225,10 @@ const Aurora: React.FC<AuroraProps> = (props) => {
      <div 
        ref={ctnDom} 
        style={{
-         position: 'fixed',
+         position: 'absolute',
          top: '0',
          left: '0',
-         width: '100vw',
+         width: '100%',
          height: '40%',
          pointerEvents: 'none',
          zIndex: 1,

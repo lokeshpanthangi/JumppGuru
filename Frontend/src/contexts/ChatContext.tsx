@@ -431,7 +431,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       const historyData = await response.json();
       console.log('📚 Chat History Response:', historyData);
 
-      // Handle case where user has no history
+      // Handle direct history array format
       if (!historyData.history || !Array.isArray(historyData.history) || historyData.history.length === 0) {
         console.log('📭 User has no chat history');
         return;
@@ -439,91 +439,167 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
       const historicalChats: Chat[] = [];
 
-      historyData.history.forEach((pageData: any) => {
-        if (pageData.chats && Array.isArray(pageData.chats) && pageData.chats.length > 0) {
-          const pageMessages: Message[] = [];
+      // Process each chat entry directly from the history array
+      historyData.history.forEach((chatEntry: any, index: number) => {
+        // Handle the new response format: chatId, user, assistant structure
+        if (chatEntry.user && chatEntry.assistant) {
+          const messages: Message[] = [];
           
-          // Group all chats from this page into a single chat
-          pageData.chats.forEach((chatData: any) => {
-            // Add user message
-            if (chatData.query) {
-              pageMessages.push({
-                id: `${chatData._id}-user`,
-                content: chatData.query,
-                type: 'user',
-                timestamp: new Date(chatData.timestamp),
-                page: pageData.page,
-              });
+          // Add user message
+          if (chatEntry.user.query) {
+            messages.push({
+              id: `${chatEntry.chatId || `history-${index}`}-user`,
+              content: chatEntry.user.query,
+              type: 'user',
+              timestamp: new Date(chatEntry.user.timestamp),
+              mode: 'research',
+              page: index + 1, // Use index as page number
+            });
+          }
+
+          // Process assistant response
+          if (chatEntry.assistant && chatEntry.assistant.content) {
+            let responseContent = '';
+            
+            // Handle content array format (blocks)
+            if (Array.isArray(chatEntry.assistant.content)) {
+              responseContent = `<BLOCKS_DATA>${JSON.stringify(chatEntry.assistant.content)}</BLOCKS_DATA>`;
+            } else if (typeof chatEntry.assistant.content === 'string') {
+              responseContent = chatEntry.assistant.content;
             }
 
-            // Add AI response
-            if (chatData.response) {
-              let responseContent = '';
+            // Add YouTube links if present in user data
+            if (chatEntry.user.youtube_links && Array.isArray(chatEntry.user.youtube_links) && chatEntry.user.youtube_links.length > 0) {
+              const limitedVideos = chatEntry.user.youtube_links.slice(0, 3);
+              const remainingVideos = chatEntry.user.youtube_links.slice(3);
               
-              // Handle different response formats
-              if (typeof chatData.response === 'string') {
-                responseContent = chatData.response;
-              } else if (Array.isArray(chatData.response)) {
-                // Convert block-based response to fast rendering format
-                responseContent = `<BLOCKS_DATA>${JSON.stringify(chatData.response)}</BLOCKS_DATA>`;
-              }
-
-              // Add YouTube links if present
-              if (chatData.youtube_links && Array.isArray(chatData.youtube_links) && chatData.youtube_links.length > 0) {
-                const limitedVideos = chatData.youtube_links.slice(0, 3);
-                const remainingVideos = chatData.youtube_links.slice(3);
-                
-                const youtubeContent = `\n\n<youtube-cards>${JSON.stringify({
-                  videos: limitedVideos,
-                  remainingVideos: remainingVideos
-                })}</youtube-cards>`;
-                responseContent += youtubeContent;
-              }
-
-              pageMessages.push({
-                id: `${chatData._id}-ai`,
-                content: responseContent,
-                type: 'ai',
-                timestamp: new Date(chatData.timestamp),
-                mode: chatData.LLM_model === 'gemini' ? 'research' : 'web',
-                page: pageData.page,
-              });
+              const youtubeContent = `\n\n<youtube-cards>${JSON.stringify({
+                videos: limitedVideos,
+                remainingVideos: remainingVideos
+              })}</youtube-cards>`;
+              responseContent += youtubeContent;
             }
-          });
+
+            messages.push({
+              id: `${chatEntry.chatId || `history-${index}`}-ai`,
+              content: responseContent,
+              type: 'ai',
+              timestamp: new Date(chatEntry.assistant.timestamp),
+              mode: 'research',
+              page: index + 1,
+            });
+          }
 
           // Sort messages by timestamp to maintain chronological order
-          pageMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+          messages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
-          // Create a single chat for this entire page
-          const pageChat: Chat = {
-            id: `history-page-${pageData.page}`,
-            title: pageData.preview || `Page ${pageData.page}`,
-            messages: pageMessages,
-            createdAt: pageMessages.length > 0 ? pageMessages[0].timestamp : new Date(),
-            updatedAt: pageMessages.length > 0 ? pageMessages[pageMessages.length - 1].timestamp : new Date(),
-            backendChatId: null, // Page-level chat doesn't have individual chat_id
-            hasUsedResearchMode: pageData.chats.some((chat: any) => chat.LLM_model === 'gemini'),
-            page: pageData.page,
-          };
+          if (messages.length > 0) {
+            // Create a chat title from the user query
+            const chatTitle = chatEntry.user.query 
+              ? chatEntry.user.query.slice(0, 50) + (chatEntry.user.query.length > 50 ? '...' : '')
+              : `Chat ${index + 1}`;
 
-          historicalChats.push(pageChat);
+            // Create a single chat for this conversation
+            const chat: Chat = {
+              id: `history-${chatEntry.chatId || index}`,
+              title: chatTitle,
+              messages: messages,
+              createdAt: messages[0].timestamp,
+              updatedAt: messages[messages.length - 1].timestamp,
+              backendChatId: chatEntry.chatId,
+              hasUsedResearchMode: true, // All these appear to be research mode chats
+              page: index + 1,
+            };
+
+            historicalChats.push(chat);
+          }
+        }
+        // Handle old format fallback (keeping for compatibility)
+        else if (chatEntry.query || chatEntry.response) {
+          const messages: Message[] = [];
+          
+          // Add user message (old format)
+          if (chatEntry.query) {
+            messages.push({
+              id: `${chatEntry._id || `history-${index}`}-user`,
+              content: chatEntry.query,
+              type: 'user',
+              timestamp: new Date(chatEntry.timestamp),
+              page: index + 1,
+            });
+          }
+
+          // Add AI response (old format)
+          if (chatEntry.response) {
+            let responseContent = '';
+            
+            // Handle different response formats
+            if (typeof chatEntry.response === 'string') {
+              responseContent = chatEntry.response;
+            } else if (Array.isArray(chatEntry.response)) {
+              responseContent = `<BLOCKS_DATA>${JSON.stringify(chatEntry.response)}</BLOCKS_DATA>`;
+            }
+
+            // Add YouTube links if present
+            if (chatEntry.youtube_links && Array.isArray(chatEntry.youtube_links) && chatEntry.youtube_links.length > 0) {
+              const limitedVideos = chatEntry.youtube_links.slice(0, 3);
+              const remainingVideos = chatEntry.youtube_links.slice(3);
+              
+              const youtubeContent = `\n\n<youtube-cards>${JSON.stringify({
+                videos: limitedVideos,
+                remainingVideos: remainingVideos
+              })}</youtube-cards>`;
+              responseContent += youtubeContent;
+            }
+
+            messages.push({
+              id: `${chatEntry._id || `history-${index}`}-ai`,
+              content: responseContent,
+              type: 'ai',
+              timestamp: new Date(chatEntry.timestamp),
+              mode: chatEntry.LLM_model === 'gemini' ? 'research' : 'web',
+              page: index + 1,
+            });
+          }
+
+          messages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+          if (messages.length > 0) {
+            const chatTitle = chatEntry.query 
+              ? chatEntry.query.slice(0, 50) + (chatEntry.query.length > 50 ? '...' : '')
+              : `Chat ${index + 1}`;
+
+            const chat: Chat = {
+              id: `history-old-${chatEntry._id || index}`,
+              title: chatTitle,
+              messages: messages,
+              createdAt: messages[0].timestamp,
+              updatedAt: messages[messages.length - 1].timestamp,
+              backendChatId: chatEntry._id,
+              hasUsedResearchMode: chatEntry.LLM_model === 'gemini',
+              page: index + 1,
+            };
+
+            historicalChats.push(chat);
+          }
         }
       });
 
-      // Sort chats by page number in descending order (3, 2, 1)
-      historicalChats.sort((a, b) => b.page - a.page);
+      // Sort chats by timestamp in descending order (latest first)
+      historicalChats.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
       if (historicalChats.length > 0) {
         console.log(`✅ Loaded ${historicalChats.length} historical chats for user ${userId}`);
+        console.log('🔍 Historical chats structure:', historicalChats);
         
         // Load historical chats
         dispatch({ type: 'LOAD_HISTORY', chats: historicalChats });
         
         // Update current page to the highest page number if we have history
         const maxPage = historicalChats.reduce((max, chat) => Math.max(max, chat.page), 0);
-        dispatch({ type: 'SET_CURRENT_PAGE', page: maxPage });
+        dispatch({ type: 'SET_CURRENT_PAGE', page: maxPage + 1 }); // +1 for the next new chat
         
-        console.log(`📄 Set current page to: ${maxPage}`);
+        console.log(`📄 Set current page to: ${maxPage + 1}`);
       } else {
         console.log('📭 No valid chats found in history');
       }
