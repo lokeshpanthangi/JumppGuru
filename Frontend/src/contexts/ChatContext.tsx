@@ -8,6 +8,7 @@ export type Message = {
   mode?: 'web' | 'research';
   isStreaming?: boolean;
   isCurrentlyGenerating?: boolean;
+  page?: number;
 };
 
 export type Chat = {
@@ -18,6 +19,7 @@ export type Chat = {
   updatedAt: Date;
   backendChatId?: string;
   hasUsedResearchMode: boolean;
+  page: number;
 };
 
 export type ChatMode = 'web' | 'research' | null;
@@ -43,6 +45,7 @@ type ChatState = {
   showAurora: boolean;
   isLiveMode: boolean;
   loadingState: string | null;
+  currentPage: number;
 };
 
 type ChatAction =
@@ -64,7 +67,9 @@ type ChatAction =
   | { type: 'SET_MODE'; mode: ChatMode }
   | { type: 'TOGGLE_AURORA' }
   | { type: 'TOGGLE_LIVE_MODE' }
-  | { type: 'SET_LOADING_STATE'; loadingState: string | null };
+  | { type: 'SET_LOADING_STATE'; loadingState: string | null }
+  | { type: 'SET_CURRENT_PAGE'; page: number }
+  | { type: 'LOAD_HISTORY'; chats: Chat[] };
 
 const initialState: ChatState = {
   chats: [],
@@ -83,6 +88,7 @@ const initialState: ChatState = {
   showAurora: false,
   isLiveMode: false,
   loadingState: null,
+  currentPage: 1,
 };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -95,6 +101,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         currentChatId: action.chat.id,
         currentChat: action.chat,
         showDashboard: false,
+        currentPage: action.chat.page,
       };
     }
     
@@ -105,6 +112,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         currentChatId: action.chatId,
         currentChat: chat || null,
         showDashboard: false,
+        currentPage: chat ? chat.page : state.currentPage,
       };
     }
     
@@ -315,6 +323,21 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'SET_LOADING_STATE':
       return { ...state, loadingState: action.loadingState };
     
+    case 'SET_CURRENT_PAGE':
+      return { ...state, currentPage: action.page };
+    
+    case 'LOAD_HISTORY': {
+      // Replace existing chats with historical chats
+      // (We want to start fresh when loading history for a user)
+      return {
+        ...state,
+        chats: action.chats,
+        // Reset current chat selection since we're loading new history
+        currentChatId: null,
+        currentChat: null,
+      };
+    }
+    
     default:
       return state;
   }
@@ -341,6 +364,8 @@ type ChatContextType = {
   toggleAurora: () => void;
   toggleLiveMode: () => void;
   setLoadingState: (loadingState: string | null) => void;
+  setCurrentPage: (page: number) => void;
+  loadChatHistory: () => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -367,8 +392,147 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const loadChatHistory = async () => {
+    const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
+    const userId = state.currentUser.username;
+
+    console.log('🚀 Fetching chat history for user:', userId);
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/genai/history/${userId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          console.log('📭 No chat history found for user:', userId);
+          return; // User has no history, that's okay
+        }
+        console.error('Failed to load chat history:', response.status);
+        return;
+      }
+
+      const historyData = await response.json();
+      console.log('📚 Chat History Response:', historyData);
+
+      // Handle case where user has no history
+      if (!historyData.history || !Array.isArray(historyData.history) || historyData.history.length === 0) {
+        console.log('📭 User has no chat history');
+        return;
+      }
+
+      const historicalChats: Chat[] = [];
+
+      historyData.history.forEach((pageData: any) => {
+        if (pageData.chats && Array.isArray(pageData.chats) && pageData.chats.length > 0) {
+          const pageMessages: Message[] = [];
+          
+          // Group all chats from this page into a single chat
+          pageData.chats.forEach((chatData: any) => {
+            // Add user message
+            if (chatData.query) {
+              pageMessages.push({
+                id: `${chatData._id}-user`,
+                content: chatData.query,
+                type: 'user',
+                timestamp: new Date(chatData.timestamp),
+                page: pageData.page,
+              });
+            }
+
+            // Add AI response
+            if (chatData.response) {
+              let responseContent = '';
+              
+              // Handle different response formats
+              if (typeof chatData.response === 'string') {
+                responseContent = chatData.response;
+              } else if (Array.isArray(chatData.response)) {
+                // Convert block-based response to fast rendering format
+                responseContent = `<BLOCKS_DATA>${JSON.stringify(chatData.response)}</BLOCKS_DATA>`;
+              }
+
+              // Add YouTube links if present
+              if (chatData.youtube_links && Array.isArray(chatData.youtube_links) && chatData.youtube_links.length > 0) {
+                const limitedVideos = chatData.youtube_links.slice(0, 3);
+                const remainingVideos = chatData.youtube_links.slice(3);
+                
+                const youtubeContent = `\n\n<youtube-cards>${JSON.stringify({
+                  videos: limitedVideos,
+                  remainingVideos: remainingVideos
+                })}</youtube-cards>`;
+                responseContent += youtubeContent;
+              }
+
+              pageMessages.push({
+                id: `${chatData._id}-ai`,
+                content: responseContent,
+                type: 'ai',
+                timestamp: new Date(chatData.timestamp),
+                mode: chatData.LLM_model === 'gemini' ? 'research' : 'web',
+                page: pageData.page,
+              });
+            }
+          });
+
+          // Sort messages by timestamp to maintain chronological order
+          pageMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+          // Create a single chat for this entire page
+          const pageChat: Chat = {
+            id: `history-page-${pageData.page}`,
+            title: pageData.preview || `Page ${pageData.page}`,
+            messages: pageMessages,
+            createdAt: pageMessages.length > 0 ? pageMessages[0].timestamp : new Date(),
+            updatedAt: pageMessages.length > 0 ? pageMessages[pageMessages.length - 1].timestamp : new Date(),
+            backendChatId: null, // Page-level chat doesn't have individual chat_id
+            hasUsedResearchMode: pageData.chats.some((chat: any) => chat.LLM_model === 'gemini'),
+            page: pageData.page,
+          };
+
+          historicalChats.push(pageChat);
+        }
+      });
+
+      // Sort chats by page number in descending order (3, 2, 1)
+      historicalChats.sort((a, b) => b.page - a.page);
+
+      if (historicalChats.length > 0) {
+        console.log(`✅ Loaded ${historicalChats.length} historical chats for user ${userId}`);
+        
+        // Load historical chats
+        dispatch({ type: 'LOAD_HISTORY', chats: historicalChats });
+        
+        // Update current page to the highest page number if we have history
+        const maxPage = historicalChats.reduce((max, chat) => Math.max(max, chat.page), 0);
+        dispatch({ type: 'SET_CURRENT_PAGE', page: maxPage });
+        
+        console.log(`📄 Set current page to: ${maxPage}`);
+      } else {
+        console.log('📭 No valid chats found in history');
+      }
+    } catch (error) {
+      console.error('❌ Error loading chat history:', error);
+    }
+  };
+
+  // Load chat history whenever currentUser changes
+  useEffect(() => {
+    if (state.currentUser.username) {
+      console.log('🔄 Loading chat history for user:', state.currentUser.username);
+      loadChatHistory();
+    }
+  }, [state.currentUser.username]);
+
   const createNewChat = (): string => {
     const chatId = `chat-${Date.now()}`;
+    // Calculate next page number - find the highest page number and add 1
+    const maxPage = state.chats.reduce((max, chat) => Math.max(max, chat.page), 0);
+    const nextPage = maxPage + 1;
+    
     const newChat: Chat = {
       id: chatId,
       title: 'New Chat',
@@ -376,8 +540,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       createdAt: new Date(),
       updatedAt: new Date(),
       hasUsedResearchMode: false,
+      page: nextPage,
     };
     dispatch({ type: 'CREATE_CHAT', chat: newChat });
+    dispatch({ type: 'SET_CURRENT_PAGE', page: nextPage });
     return chatId;
   };
 
@@ -404,6 +570,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       type: 'user',
       timestamp: new Date(),
       mode,
+      page: state.currentPage,
     };
 
     dispatch({ type: 'ADD_MESSAGE', chatId, message: userMessage });
@@ -429,7 +596,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             user_id: userId,
             query: content.trim(),
             lang: 'auto',
-            max_images: 3
+            max_images: 3,
+            page: state.currentPage
           })
         }).then(res => {
           if (!res.ok) throw new Error(`GenAI API failed: ${res.status}`);
@@ -481,6 +649,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           mode: 'research',
           isStreaming: false,
           isCurrentlyGenerating: false,
+          page: state.currentPage,
         };
         dispatch({ type: 'ADD_MESSAGE', chatId, message: genaiMessage });
 
@@ -505,7 +674,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               },
               body: JSON.stringify({
                 chat_id: backendChatId,
-                videos: youtubeResponse.videos
+                videos: youtubeResponse.videos,
+                page: state.currentPage
               })
             });
             
@@ -562,7 +732,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             user_id: userId,
             query: content.trim(),
             mode: mode || 'general',
-            lang: 'auto'
+            lang: 'auto',
+            page: state.currentPage
           };
           
           // Add chat_id if available
@@ -598,6 +769,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             timestamp: new Date(),
             isStreaming: true,
             isCurrentlyGenerating: true,
+            page: state.currentPage,
           };
           dispatch({ type: 'ADD_MESSAGE', chatId, message: apiMessage });
         } catch (error) {
@@ -609,6 +781,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             timestamp: new Date(),
             isStreaming: true,
             isCurrentlyGenerating: true,
+            page: state.currentPage,
           };
           dispatch({ type: 'ADD_MESSAGE', chatId, message: errorMessage });
         }
@@ -625,6 +798,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         timestamp: new Date(),
         isStreaming: true,
         isCurrentlyGenerating: true,
+        page: state.currentPage,
       };
 
       dispatch({ type: 'ADD_MESSAGE', chatId, message: errorMessage });
@@ -700,6 +874,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'SET_LOADING_STATE', loadingState });
   };
 
+  const setCurrentPage = (page: number) => {
+    dispatch({ type: 'SET_CURRENT_PAGE', page });
+  };
+
   const addAIMessage = (content: string) => {
     let chatId = state.currentChatId;
     if (!chatId) {
@@ -711,6 +889,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       content,
       type: 'ai',
       timestamp: new Date(),
+      page: state.currentPage,
     };
 
     dispatch({ type: 'ADD_MESSAGE', chatId, message: aiMessage });
@@ -753,6 +932,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     toggleAurora,
     toggleLiveMode,
     setLoadingState,
+    setCurrentPage,
+    loadChatHistory,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
