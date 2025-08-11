@@ -70,10 +70,10 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
               onChange={(e) => setName(e.target.value)}
               placeholder="Enter your name..."
               disabled={isCreating}
-              className="w-full px-4 py-3 bg-input-field-bg border border-input-border rounded-lg 
+              className="w-full px-4 py-3 bg-[hsl(var(--input-field-bg)/0.85)] border border-input-border rounded-lg 
                        text-text-primary placeholder:text-text-muted
-                       focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary
-                       disabled:opacity-50 disabled:cursor-not-allowed"
+                       focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary focus:bg-[hsl(var(--input-field-bg)/0.95)]
+                       disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
             />
           </div>
 

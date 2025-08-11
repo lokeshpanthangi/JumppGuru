@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Search, Globe, Copy, ThumbsUp, ThumbsDown, Volume2, VolumeX, Brain } from 'lucide-react';
 import { useChatContext } from '../contexts/ChatContext';
-import { ChatInput } from './ChatInput';
+import { ChatInput, type ChatInputRef } from './ChatInput';
 import { TypingAnimation } from './ui/typing-animation';
 import { LoadingState } from './ui/LoadingState';
+import ResearchLoadingAnimation from './ui/ResearchLoadingAnimation';
 import { MarkdownRenderer } from './ui/MarkdownRenderer';
 import { FastBlockRenderer } from './ui/FastBlockRenderer';
 import { StreamingMessage } from './ui/StreamingMessage';
@@ -276,7 +277,7 @@ const formatMessageTime = (date: Date | string): string => {
 };
 
 export const ChatArea: React.FC = () => {
-  const { state, addAIMessage } = useChatContext();
+  const { state, addAIMessage, sendMessage } = useChatContext();
   const [showCenteredInput, setShowCenteredInput] = useState(true);
   const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
@@ -289,6 +290,7 @@ export const ChatArea: React.FC = () => {
   const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<ChatInputRef>(null);
   
   // TTS Streaming State
   const [ttsAudioCache, setTtsAudioCache] = useState<Map<string, Blob[]>>(new Map());
@@ -308,6 +310,42 @@ export const ChatArea: React.FC = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [state.currentChat?.messages]);
+
+  // Global Enter key handler for chat area
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Only handle Enter key in chat area when not in input field
+      if (e.key === 'Enter' && !e.shiftKey && !state.isTyping) {
+        const target = e.target as HTMLElement;
+        
+        // Don't handle if user is typing in input field, textarea, or contenteditable
+        if (target.tagName === 'TEXTAREA' || 
+            target.tagName === 'INPUT' || 
+            target.contentEditable === 'true' ||
+            target.isContentEditable) {
+          return;
+        }
+        
+        // Don't handle if any modal is open
+        if (isQuizModalOpen || isQuizDisplayOpen) {
+          return;
+        }
+        
+        // Focus the chat input and trigger submission if there's content
+        if (chatInputRef.current) {
+          e.preventDefault();
+          chatInputRef.current.focusAndSubmit();
+        }
+      }
+    };
+
+    // Add event listener to document
+    document.addEventListener('keydown', handleGlobalKeyDown);
+    
+    return () => {
+      document.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, [state.isTyping, isQuizModalOpen, isQuizDisplayOpen]);
 
   // Cleanup audio when component unmounts or chat changes
   useEffect(() => {
@@ -352,9 +390,9 @@ export const ChatArea: React.FC = () => {
   const getModeIcon = (mode?: string) => {
     switch (mode) {
       case 'web':
-        return <Search className="w-3 h-3" />;
-      case 'research':
         return <Globe className="w-3 h-3" />;
+      case 'research':
+        return <Search className="w-3 h-3" />;
       default:
         return null;
     }
@@ -760,7 +798,7 @@ export const ChatArea: React.FC = () => {
           </div>
           
           <div className="w-full max-w-3xl">
-            <ChatInput centered onMessageSent={handleMessageSent} />
+            <ChatInput ref={chatInputRef} centered onMessageSent={handleMessageSent} />
           </div>
         </div>
       ) : (
@@ -775,6 +813,10 @@ export const ChatArea: React.FC = () => {
               <div
                 key={message.id}
                 className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+                style={{
+                  marginRight: message.type === 'user' ? (state.sidebarCollapsed ? '165px' : '40px') : '0',
+                  marginLeft: message.type === 'user' ? '0' : (state.sidebarCollapsed ? '170px' : '50px')
+                }}
               >
                 <div
                   className={`max-w-[80%] ${
@@ -801,15 +843,17 @@ export const ChatArea: React.FC = () => {
                       onMouseEnter={() => setHoveredMessageId(message.id)}
                       onMouseLeave={() => setHoveredMessageId(null)}
                     >
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center bg-white">
-                          <img src="/logo.png" alt="JumpApp Logo" className="w-full h-full object-contain" />
+                      {message.mode === 'research' && (
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center bg-white">
+                            <img src="/logo.png" alt="JumpApp Logo" className="w-full h-full object-contain" />
+                          </div>
+                          <span className="font-medium text-text-primary">JumpApp</span>
+                          <span className="text-xs text-text-muted">
+                            {formatMessageTime(message.timestamp)}
+                          </span>
                         </div>
-                        <span className="font-medium text-text-primary">JumpApp</span>
-                        <span className="text-xs text-text-muted">
-                          {formatMessageTime(message.timestamp)}
-                        </span>
-                      </div>
+                      )}
                       <div className="prose max-w-none">
                         {message.type === 'ai' && message.isCurrentlyGenerating && message.mode !== 'research' ? (
                           <StreamingMessage 
@@ -915,17 +959,28 @@ export const ChatArea: React.FC = () => {
             ))}
             
             {(state.isTyping || state.loadingState) && (
-              <div className="flex justify-start">
+              <div 
+                className="flex justify-start"
+                style={{
+                  marginLeft: state.sidebarCollapsed ? '170px' : '85px'
+                }}
+              >
                 <div className="bg-transparent text-text-primary max-w-[80%]">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center bg-white">
-                      <img src="/logo.png" alt="JumpApp Logo" className="w-full h-full object-contain" />
+                  {state.loadingState && state.loadingState.includes('research') && (
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center bg-white">
+                        <img src="/logo.png" alt="JumpApp Logo" className="w-full h-full object-contain" />
+                      </div>
+                      <span className="font-medium text-text-primary">JumpApp</span>
                     </div>
-                    <span className="font-medium text-text-primary">JumpApp</span>
-                  </div>
+                  )}
                   <div className="prose max-w-none">
                     {state.loadingState ? (
-                      <LoadingState message={state.loadingState} />
+                      state.loadingState.includes('research') ? (
+                        <ResearchLoadingAnimation />
+                      ) : (
+                        <LoadingState message={state.loadingState} />
+                      )
                     ) : (
                       <TypingAnimation className="text-base" />
                     )}
@@ -941,8 +996,14 @@ export const ChatArea: React.FC = () => {
 
           {/* Input Area - Floating Overlay */}
           <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-chat-bg via-chat-bg/95 to-transparent pointer-events-none">
-            <div className="pointer-events-auto">
-              <ChatInput onMessageSent={handleMessageSent} />
+            <div 
+              className="pointer-events-auto"
+              style={{
+                marginLeft: state.sidebarCollapsed ? '85px' : '15px',
+                marginRight: state.sidebarCollapsed ? '80px' : '15px'
+              }}
+            >
+              <ChatInput ref={chatInputRef} onMessageSent={handleMessageSent} />
             </div>
           </div>
         </div>

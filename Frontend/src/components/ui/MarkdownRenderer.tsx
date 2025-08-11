@@ -228,7 +228,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
           },
           li({ children }) {
             return (
-              <li className="text-text-primary leading-relaxed mb-2" style={{ marginLeft: 0, paddingLeft: 0, display: 'list-item' }}>
+              <li className="text-text-primary leading-relaxed" style={{ marginLeft: 0, paddingLeft: 0, display: 'list-item' }}>
                 {children}
               </li>
             );

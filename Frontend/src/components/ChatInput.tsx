@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Waves, Paperclip, Pin, Search, Globe, Mic, X, MicOff } from 'lucide-react';
 import { useChatContext, type ChatMode } from '../contexts/ChatContext';
 import { useLiveKit } from '../hooks/useLiveKit';
@@ -9,7 +9,12 @@ interface ChatInputProps {
   onMessageSent?: () => void;
 }
 
-export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessageSent }) => {
+export interface ChatInputRef {
+  focusAndSubmit: () => void;
+  focus: () => void;
+}
+
+export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({ centered = false, onMessageSent }, ref) => {
   const { state, sendMessage, setMode, toggleAurora, toggleLiveMode, addAIMessage } = useChatContext();
   const [message, setMessage] = useState('');
   const [isFocused, setIsFocused] = useState(false);
@@ -195,9 +200,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
   const getModeIcon = () => {
     switch (state.currentMode) {
       case 'web':
-        return Search;
-      case 'research':
         return Globe;
+      case 'research':
+        return Search;
       default:
         return Pin;
     }
@@ -211,6 +216,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
   };
 
   const ModeIcon = getModeIcon();
+
+  // Expose methods to parent component via ref
+  useImperativeHandle(ref, () => ({
+    focusAndSubmit: () => {
+      // Focus the input first
+      inputRef.current?.focus();
+      
+      // If there's content, submit it
+      if (message.trim()) {
+        handleSubmit(new Event('submit') as any);
+      }
+    },
+    focus: () => {
+      inputRef.current?.focus();
+    }
+  }), [message, handleSubmit]);
 
   return (
     <div className={`relative ${centered ? 'w-full max-w-2xl mx-auto' : 'w-full max-w-4xl mx-auto'}`}>
@@ -265,7 +286,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
                       state.currentMode === 'web' ? 'bg-sidebar-item-active' : ''
                     }`}
                   >
-                    <Search className="w-4 h-4 text-brand-primary" />
+                    <Globe className="w-4 h-4 text-brand-primary" />
                     <span className="text-sm text-text-primary">Web Search</span>
                   </button>
                   
@@ -281,7 +302,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
                       state.currentMode === 'research' ? 'bg-sidebar-item-active' : ''
                     }`}
                   >
-                    <Globe className={`w-4 h-4 ${hasUsedResearchMode ? 'text-gray-400' : 'text-brand-primary'}`} />
+                    <Search className={`w-4 h-4 ${hasUsedResearchMode ? 'text-gray-400' : 'text-brand-primary'}`} />
                     <span className={`text-sm ${hasUsedResearchMode ? 'text-gray-400' : 'text-text-primary'}`}>
                       Research {hasUsedResearchMode ? '(Used)' : ''}
                     </span>
@@ -401,4 +422,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
       )}
     </div>
   );
-};
+});
+
+// Add display name for better debugging
+ChatInput.displayName = 'ChatInput';
