@@ -81,7 +81,7 @@ const initialState: ChatState = {
   userName: 'User',
   currentUser: {
     name: 'User',
-    username: 'frontend-user-12345'
+    username: '' // Empty username initially - no API call until real user is set
   },
   isTyping: false,
   currentMode: null,
@@ -521,7 +521,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   // Load chat history whenever currentUser changes
   useEffect(() => {
-    if (state.currentUser.username) {
+    if (state.currentUser.username && state.currentUser.username.trim() !== '') {
       console.log('🔄 Loading chat history for user:', state.currentUser.username);
       loadChatHistory();
     }
@@ -673,9 +673,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({
+                user_id: userId,
+                page: state.currentPage,
                 chat_id: backendChatId,
-                videos: youtubeResponse.videos,
-                page: state.currentPage
+                videos: youtubeResponse.videos
               })
             });
             
