@@ -2,8 +2,10 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 class QueryRequest(BaseModel):
+    page: int
     query: str
-    user_id: Optional[str] = None
+    # user_id: Optional[str] = None
+    user_id: str
     chat_id: Optional[str] = None
     lang: Optional[str] = "auto"  # auto | english | hinglish
     mode: Optional[str] = "general"  # general | web

@@ -14,6 +14,9 @@ from typing import List, Dict
 import boto3
 from botocore.exceptions import ClientError
 import io
+from app.db.mongodb import mongo_collection
+from fastapi import HTTPException
+from bson import ObjectId
 
 load_dotenv()
 
@@ -135,6 +138,22 @@ async def generate_tutorial(payload: GenAIRequest):
             "text_content": clean_text,
         })
 
+
+        # try:
+        #     mongo_collection.insert_one({
+        #         "user_id": payload.user_id,
+        #         "page": page,
+        #         "timestamp": datetime.utcnow(),
+        #         "chat_id": chat_id,
+        #         "query": payload.query,
+        #         "response": blocks,
+        #         "LLM_model": "gemini",
+        #         # "language": user_lang,
+        #         # "source": source
+        #     })
+        # except Exception as e:
+        #     print(f"Failed to insert into MongoDB: {e}")
+
         return {
             "source": "LLM+IMG",
             "language": payload.lang or "auto",
@@ -146,47 +165,103 @@ async def generate_tutorial(payload: GenAIRequest):
         raise HTTPException(status_code=500, detail=f"Failed to process response: {e}")
 
 
+# @router.get("/history/{user_id}")
+# async def get_chat_history(user_id: str):
+#     try:
+#         # Fetch and sort chats by timestamp
+#         chats = list(
+#             multimodal_chat_collection
+#             .find({"user_id": user_id})
+#             .sort("timestamp", 1)  # Ascending order
+#         )
+
+#         # Group by chat_id
+#         history_dict: Dict[str, Dict] = {}
+#         for chat in chats:
+#             chat_id = chat["chat_id"]
+
+#             if chat_id not in history_dict:
+#                 history_dict[chat_id] = {
+#                     "chatId": chat_id,
+#                     "user": {},
+#                     "assistant": {}
+#                 }
+
+#             if chat["role"] == "user":
+#                 history_dict[chat_id]["user"] = {
+#                     "query": chat.get("text_content", ""),
+#                     "timestamp": chat["timestamp"],
+#                     "youtube_links": chat.get("youtube_links", []),
+#                     "generated_mcq_questions": chat.get("generated_mcq_questions", []),
+#                 }
+
+#             elif chat["role"] == "assistant":
+#                 history_dict[chat_id]["assistant"] = {
+#                     "content": chat.get("content", []),
+#                     "timestamp": chat["timestamp"]
+#                 }
+
+#         # Convert dict to sorted list
+#         history_list = list(history_dict.values())
+#         history_list.sort(key=lambda x: x["user"].get("timestamp", datetime.min))
+
+#         return {"history": history_list}
+
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Failed to fetch chat history: {e}")
+
 @router.get("/history/{user_id}")
 async def get_chat_history(user_id: str):
     try:
-        # Fetch and sort chats by timestamp
-        chats = list(
-            multimodal_chat_collection
-            .find({"user_id": user_id})
-            .sort("timestamp", 1)  # Ascending order
-        )
-
-        # Group by chat_id
-        history_dict: Dict[str, Dict] = {}
-        for chat in chats:
-            chat_id = chat["chat_id"]
-
-            if chat_id not in history_dict:
-                history_dict[chat_id] = {
-                    "chatId": chat_id,
-                    "user": {},
-                    "assistant": {}
+        pipeline = [
+            {"$match": {"user_id": user_id}},
+            {"$sort": {"timestamp": 1}},
+            {
+                "$group": {
+                    "_id": "$page",
+                    "chats": {
+                        "$push": {
+                            "_id": {"$toString": "$_id"},
+                            "timestamp": "$timestamp",
+                            "chat_id": "$chat_id",
+                            "query": "$query",
+                            "response": "$response",
+                            "youtube_links": "$youtube_links",
+                            "generated_mcq_questions": "$generated_mcq_questions",
+                            "LLM_model": "$LLM_model"
+                        }
+                    }
                 }
+            },
+            {"$sort": {"_id": 1}}
+        ]
 
-            if chat["role"] == "user":
-                history_dict[chat_id]["user"] = {
-                    "query": chat.get("text_content", ""),
-                    "timestamp": chat["timestamp"],
-                    "youtube_links": chat.get("youtube_links", []),
-                    "generated_mcq_questions": chat.get("generated_mcq_questions", []),
-                }
+        history_data = list(mongo_collection.aggregate(pipeline))
 
-            elif chat["role"] == "assistant":
-                history_dict[chat_id]["assistant"] = {
-                    "content": chat.get("content", []),
-                    "timestamp": chat["timestamp"]
-                }
+        # If no history found, return empty list
+        if not history_data:
+            return {
+                "user_id": user_id,
+                "history": []
+            }
 
-        # Convert dict to sorted list
-        history_list = list(history_dict.values())
-        history_list.sort(key=lambda x: x["user"].get("timestamp", datetime.min))
+        # Transform data to add "page" and "preview"
+        formatted_history = []
+        for doc in history_data:
+            page_num = doc.pop("_id")
+            chats = doc["chats"]
+            preview = chats[0]["query"] if chats else ""  # 1st chat query
+            formatted_history.append({
+                "page": page_num,
+                "preview": preview,
+                "chats": chats
+            })
 
-        return {"history": history_list}
+        return {
+            "user_id": user_id,
+            "history": formatted_history
+        }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch chat history: {e}")
+        print(f"Error fetching chat history: {e}")
+        raise HTTPException(status_code=500, detail="Error retrieving chat history")

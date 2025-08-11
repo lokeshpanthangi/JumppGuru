@@ -18,7 +18,6 @@ async def scrape_and_summarize(url: str) -> str:
         print(f"Scrape error at {url}: {e}")
         return ""
 
-    print(text)
     prompt = f"Summarize the following article in simple points:\n\n{text}"
     completion = client.chat.completions.create(
         model="gpt-4o-mini",
