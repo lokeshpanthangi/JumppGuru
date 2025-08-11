@@ -228,7 +228,7 @@ const Aurora: React.FC<AuroraProps> = (props) => {
          position: 'fixed',
          top: '0',
          left: '0',
-         width: '100%',
+         width: '100vw',
          height: '40%',
          pointerEvents: 'none',
          zIndex: 1,
@@ -239,7 +239,7 @@ const Aurora: React.FC<AuroraProps> = (props) => {
    );
 };
 
-const getTimeOfDayGreeting = (): string => {
+const getTimeOfDayGreeting = (userName: string): string => {
   // Get current time in IST (Indian Standard Time - UTC+5:30)
   const now = new Date();
   const istTime = new Date(now.getTime() + (5.5 * 60 * 60 * 1000)); // Add 5.5 hours to UTC
@@ -247,15 +247,15 @@ const getTimeOfDayGreeting = (): string => {
   
   if (hour < 12) {
     const morningMessages = ['Coffee Time', 'Sunny Start', "Let's Start", "Sun's Out"];
-    return morningMessages[Math.floor(Math.random() * morningMessages.length)];
+    return `${morningMessages[Math.floor(Math.random() * morningMessages.length)]}, ${userName}`;
   }
   
   if (hour < 17) {
     const afternoonMessages = ['Midday Vibes', 'Sunny Noon', 'Good Afternoon'];
-    return afternoonMessages[Math.floor(Math.random() * afternoonMessages.length)];
+    return `${afternoonMessages[Math.floor(Math.random() * afternoonMessages.length)]}, ${userName}`;
   }
   
-  const eveningMessages = ['Hello Batman', 'Evening, User', 'Dream On, User'];
+  const eveningMessages = ['Hello Batman', `Evening, ${userName}`, `Dream On, ${userName}`];
   return eveningMessages[Math.floor(Math.random() * eveningMessages.length)];
 };
 
@@ -516,7 +516,7 @@ export const ChatArea: React.FC = () => {
       });
 
       // Wait 10 seconds before starting to fetch files
-      await new Promise(resolve => setTimeout(resolve, 10000));
+      await new Promise(resolve => setTimeout(resolve, 6000));
 
       // Fetch all audio files
       const audioFiles: Blob[] = [];
@@ -760,12 +760,12 @@ export const ChatArea: React.FC = () => {
 
   return (
     <div 
-      className="flex-1 flex flex-col bg-chat-bg transition-all duration-500 ease-in-out h-screen"
+      className="flex-1 flex flex-col bg-chat-bg transition-all duration-500 ease-in-out h-screen relative"
     >
-      {/* Aurora Effect */}
-      <div className={`transition-opacity duration-1000 ease-in-out ${
+      {/* Aurora Effect - Always in background */}
+      <div className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
         state.showAurora ? 'opacity-100' : 'opacity-0 pointer-events-none'
-      }`}>
+      }`} style={{ zIndex: 5 }}>
         <Aurora 
           colorStops={["#5227FF", "#7cff67", "#5227FF"]}
           amplitude={1.0}
@@ -782,14 +782,11 @@ export const ChatArea: React.FC = () => {
       )}
       {showCenteredInput && !hasMessages ? (
         /* Welcome Screen */
-        <div className="flex-1 flex flex-col items-center justify-start min-h-screen p-8 pt-48">
+        <div className="flex-1 flex flex-col items-center justify-start min-h-screen p-8 pt-48 relative z-10">
           <div className="text-center mb-8">
             <h1 className="text-5xl font-bold mb-6">
               <span className="gradient-welcome">
-                {isEveningTime() 
-                  ? getTimeOfDayGreeting() 
-                  : `${getTimeOfDayGreeting()}, ${state.userName}`
-                }
+                {getTimeOfDayGreeting(state.userName)}
               </span>
             </h1>
             <p className="text-xl text-text-secondary mb-6">
@@ -803,7 +800,7 @@ export const ChatArea: React.FC = () => {
         </div>
       ) : (
         /* Active Chat - Full Screen */
-        <div className="flex-1 flex flex-col h-full relative">
+        <div className="flex-1 flex flex-col h-full relative z-10">
           {/* Messages Container - Full Screen */}
           <div 
             ref={chatContainerRef}
@@ -812,7 +809,7 @@ export const ChatArea: React.FC = () => {
             {state.currentChat?.messages.map((message) => (
               <div
                 key={message.id}
-                className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+                className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'} transition-all duration-sidebar ease-sidebar`}
                 style={{
                   marginRight: message.type === 'user' ? (state.sidebarCollapsed ? '165px' : '40px') : '0',
                   marginLeft: message.type === 'user' ? '0' : (state.sidebarCollapsed ? '170px' : '50px')
@@ -960,7 +957,7 @@ export const ChatArea: React.FC = () => {
             
             {(state.isTyping || state.loadingState) && (
               <div 
-                className="flex justify-start"
+                className="flex justify-start transition-all duration-sidebar ease-sidebar"
                 style={{
                   marginLeft: state.sidebarCollapsed ? '170px' : '85px'
                 }}
@@ -995,9 +992,9 @@ export const ChatArea: React.FC = () => {
 
 
           {/* Input Area - Floating Overlay */}
-          <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-chat-bg via-chat-bg/95 to-transparent pointer-events-none">
+          <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-chat-bg via-chat-bg/95 to-transparent pointer-events-none z-10">
             <div 
-              className="pointer-events-auto"
+              className="pointer-events-auto transition-all duration-sidebar ease-sidebar"
               style={{
                 marginLeft: state.sidebarCollapsed ? '85px' : '15px',
                 marginRight: state.sidebarCollapsed ? '80px' : '15px'

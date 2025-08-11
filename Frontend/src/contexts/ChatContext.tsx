@@ -46,6 +46,7 @@ type ChatState = {
   isLiveMode: boolean;
   loadingState: string | null;
   currentPage: number;
+  hasInitializedUser: boolean; // Track if user has been initialized
 };
 
 type ChatAction =
@@ -63,6 +64,7 @@ type ChatAction =
   | { type: 'SET_DASHBOARD'; show: boolean }
   | { type: 'SET_USER_NAME'; name: string }
   | { type: 'SET_CURRENT_USER'; user: UserData }
+  | { type: 'SET_USER_INITIALIZED'; initialized: boolean }
   | { type: 'SET_TYPING'; isTyping: boolean }
   | { type: 'SET_MODE'; mode: ChatMode }
   | { type: 'TOGGLE_AURORA' }
@@ -89,6 +91,7 @@ const initialState: ChatState = {
   isLiveMode: false,
   loadingState: null,
   currentPage: 1,
+  hasInitializedUser: false,
 };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -308,6 +311,12 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         userName: action.user.name 
       };
     
+    case 'SET_USER_INITIALIZED':
+      return {
+        ...state,
+        hasInitializedUser: action.initialized
+      };
+    
     case 'SET_TYPING':
       return { ...state, isTyping: action.isTyping };
     
@@ -385,10 +394,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       try {
         const userData: UserData = JSON.parse(savedUser);
         dispatch({ type: 'SET_CURRENT_USER', user: userData });
+        dispatch({ type: 'SET_USER_INITIALIZED', initialized: true });
       } catch (error) {
         console.error('Error loading user from localStorage:', error);
         localStorage.removeItem('currentUser');
+        dispatch({ type: 'SET_USER_INITIALIZED', initialized: true });
       }
+    } else {
+      dispatch({ type: 'SET_USER_INITIALIZED', initialized: true });
     }
   }, []);
 
@@ -826,9 +839,22 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   };
 
   const setCurrentUser = (user: UserData) => {
+    // Check if we're switching to a different user (and the app has been initialized)
+    const isUserChange = state.hasInitializedUser && 
+                         state.currentUser.username !== user.username && 
+                         state.currentUser.username !== '';
+    
     dispatch({ type: 'SET_CURRENT_USER', user });
     // Save to localStorage
     localStorage.setItem('currentUser', JSON.stringify(user));
+    
+    // Reload the page if switching to a different user (but not on initial load)
+    if (isUserChange) {
+      console.log(`🔄 User changed from "${state.currentUser.username}" to "${user.username}" - reloading page`);
+      setTimeout(() => {
+        window.location.reload();
+      }, 500); // Small delay to show the switch notification
+    }
   };
 
   const createUser = async (name: string): Promise<UserData> => {
@@ -849,8 +875,21 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
       const userData: UserData = await response.json();
       
+      // Check if we're creating a different user (not the initial empty user)
+      const isNewUserCreation = state.hasInitializedUser && 
+                                state.currentUser.username !== userData.username && 
+                                state.currentUser.username !== '';
+      
       // Save to localStorage and set as current user
       setCurrentUser(userData);
+      
+      // If this is a new user creation (not initial setup), reload the page
+      if (isNewUserCreation) {
+        console.log(`🔄 New user "${userData.username}" created - reloading page`);
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000); // Slightly longer delay to show the creation success message
+      }
       
       return userData;
     } catch (error) {

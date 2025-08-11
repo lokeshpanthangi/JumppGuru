@@ -61,8 +61,8 @@ const ResearchLoadingAnimation: React.FC = () => {
 
   return (
     <div className="flex items-start justify-center p-4">
-      {/* Animation on the left - smaller and moved up */}
-      <div className="w-16 h-16 flex-shrink-0 mr-4 -mt-3">
+      {/* Animation on the left - smaller and moved up more */}
+      <div className="w-16 h-16 flex-shrink-0 mr-2 -mt-5">
         {currentAnimation && (
           <DotLottieReact
             src={currentAnimation}
