@@ -239,7 +239,10 @@ const Aurora: React.FC<AuroraProps> = (props) => {
 };
 
 const getTimeOfDayGreeting = (): string => {
-  const hour = new Date().getHours();
+  // Get current time in IST (Indian Standard Time - UTC+5:30)
+  const now = new Date();
+  const istTime = new Date(now.getTime() + (5.5 * 60 * 60 * 1000)); // Add 5.5 hours to UTC
+  const hour = istTime.getUTCHours();
   
   if (hour < 12) {
     const morningMessages = ['Coffee Time', 'Sunny Start', "Let's Start", "Sun's Out"];
@@ -256,7 +259,10 @@ const getTimeOfDayGreeting = (): string => {
 };
 
 const isEveningTime = (): boolean => {
-  const hour = new Date().getHours();
+  // Get current time in IST (Indian Standard Time - UTC+5:30)
+  const now = new Date();
+  const istTime = new Date(now.getTime() + (5.5 * 60 * 60 * 1000)); // Add 5.5 hours to UTC
+  const hour = istTime.getUTCHours();
   return hour >= 17;
 };
 
@@ -652,11 +658,10 @@ export const ChatArea: React.FC = () => {
     
     setIsGeneratingQuiz(true);
     try {
-      const HARDCODED_USER_ID = 'frontend-user-12345';
       const backendUrl = import.meta.env.VITE_BACKEND_URL;
       
       const requestBody = {
-        user_id: HARDCODED_USER_ID,
+        user_id: state.currentUser.username,
         num_questions: numQuestions,
         difficulty: difficulty,
         chat_id: state.currentChat.backendChatId

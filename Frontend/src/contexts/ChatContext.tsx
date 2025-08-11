@@ -22,6 +22,11 @@ export type Chat = {
 
 export type ChatMode = 'web' | 'research' | null;
 
+export type UserData = {
+  name: string;
+  username: string;
+};
+
 type Theme = 'light' | 'dark';
 
 type ChatState = {
@@ -32,6 +37,7 @@ type ChatState = {
   sidebarCollapsed: boolean;
   showDashboard: boolean;
   userName: string;
+  currentUser: UserData;
   isTyping: boolean;
   currentMode: ChatMode;
   showAurora: boolean;
@@ -53,6 +59,7 @@ type ChatAction =
   | { type: 'TOGGLE_SIDEBAR' }
   | { type: 'SET_DASHBOARD'; show: boolean }
   | { type: 'SET_USER_NAME'; name: string }
+  | { type: 'SET_CURRENT_USER'; user: UserData }
   | { type: 'SET_TYPING'; isTyping: boolean }
   | { type: 'SET_MODE'; mode: ChatMode }
   | { type: 'TOGGLE_AURORA' }
@@ -67,6 +74,10 @@ const initialState: ChatState = {
   sidebarCollapsed: true,
   showDashboard: false,
   userName: 'User',
+  currentUser: {
+    name: 'User',
+    username: 'frontend-user-12345'
+  },
   isTyping: false,
   currentMode: null,
   showAurora: false,
@@ -282,6 +293,13 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'SET_USER_NAME':
       return { ...state, userName: action.name };
     
+    case 'SET_CURRENT_USER':
+      return { 
+        ...state, 
+        currentUser: action.user,
+        userName: action.user.name 
+      };
+    
     case 'SET_TYPING':
       return { ...state, isTyping: action.isTyping };
     
@@ -317,6 +335,8 @@ type ChatContextType = {
   toggleSidebar: () => void;
   setDashboard: (show: boolean) => void;
   setUserName: (name: string) => void;
+  setCurrentUser: (user: UserData) => void;
+  createUser: (name: string) => Promise<UserData>;
   setMode: (mode: ChatMode) => void;
   toggleAurora: () => void;
   toggleLiveMode: () => void;
@@ -332,6 +352,20 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     document.documentElement.classList.toggle('dark', state.theme === 'dark');
   }, [state.theme]);
+
+  // Load current user from localStorage on initialization
+  useEffect(() => {
+    const savedUser = localStorage.getItem('currentUser');
+    if (savedUser) {
+      try {
+        const userData: UserData = JSON.parse(savedUser);
+        dispatch({ type: 'SET_CURRENT_USER', user: userData });
+      } catch (error) {
+        console.error('Error loading user from localStorage:', error);
+        localStorage.removeItem('currentUser');
+      }
+    }
+  }, []);
 
   const createNewChat = (): string => {
     const chatId = `chat-${Date.now()}`;
@@ -376,7 +410,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'SET_TYPING', isTyping: true });
 
     const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
-    const HARDCODED_USER_ID = 'frontend-user-12345';
+    const userId = state.currentUser.username;
     const aiMessageId = `msg-${Date.now()}-ai`;
 
     try {
@@ -392,7 +426,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            user_id: HARDCODED_USER_ID,
+            user_id: userId,
             query: content.trim(),
             lang: 'auto',
             max_images: 3
@@ -494,7 +528,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         let youtubeContent = '';
         if (youtubeResponse.error) {
           console.error('YouTube API Error:', youtubeResponse.error);
-          youtubeContent = '\n\n## 📺 Related Videos\n\n⚠️ Video recommendations temporarily unavailable.';
+          youtubeContent = '\n\n## Related Videos\n\n⚠️ Video recommendations temporarily unavailable.';
         } else if (youtubeResponse.videos && Array.isArray(youtubeResponse.videos)) {
           // Show only first 3 videos by default
           const limitedVideos = youtubeResponse.videos.slice(0, 3);
@@ -525,7 +559,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           
           // Prepare request body with optional chat_id
           const requestBody: any = {
-            user_id: HARDCODED_USER_ID,
+            user_id: userId,
             query: content.trim(),
             mode: mode || 'general',
             lang: 'auto'
@@ -616,6 +650,40 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'SET_USER_NAME', name });
   };
 
+  const setCurrentUser = (user: UserData) => {
+    dispatch({ type: 'SET_CURRENT_USER', user });
+    // Save to localStorage
+    localStorage.setItem('currentUser', JSON.stringify(user));
+  };
+
+  const createUser = async (name: string): Promise<UserData> => {
+    const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
+    
+    try {
+      const response = await fetch(`${BACKEND_URL}/users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: name.trim() }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to create user: ${response.status}`);
+      }
+
+      const userData: UserData = await response.json();
+      
+      // Save to localStorage and set as current user
+      setCurrentUser(userData);
+      
+      return userData;
+    } catch (error) {
+      console.error('Error creating user:', error);
+      throw error;
+    }
+  };
+
   const setMode = (mode: ChatMode) => {
     dispatch({ type: 'SET_MODE', mode });
   };
@@ -679,6 +747,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     toggleSidebar,
     setDashboard,
     setUserName,
+    setCurrentUser,
+    createUser,
     setMode,
     toggleAurora,
     toggleLiveMode,

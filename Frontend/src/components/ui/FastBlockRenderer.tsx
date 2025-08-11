@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { marked } from 'marked';
 import { YouTubeCards, parseYouTubeCards } from './YouTubeCards';
+import { ImageModal } from './ImageModal';
 
 // Configure marked for better rendering
 marked.setOptions({
@@ -30,6 +31,8 @@ interface FastBlockRendererProps {
 }
 
 export const FastBlockRenderer: React.FC<FastBlockRendererProps> = ({ content, className }) => {
+  const [selectedImage, setSelectedImage] = useState<{ src: string; alt: string } | null>(null);
+  
   // Parse YouTube cards from content
   const { content: cleanedContent, videos, remainingVideos } = parseYouTubeCards(content);
   
@@ -59,10 +62,18 @@ export const FastBlockRenderer: React.FC<FastBlockRendererProps> = ({ content, c
         {/* Render YouTube cards if present */}
         {videos && (
           <div style={{ marginTop: '24px' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '500', color: 'var(--text-primary)', marginBottom: '12px' }}>📺 Related Videos</h3>
+            <h3 style={{ fontSize: '18px', fontWeight: '500', color: 'var(--text-primary)', marginBottom: '12px' }}>Related Videos</h3>
             <YouTubeCards videos={videos} remainingVideos={remainingVideos} />
           </div>
         )}
+        
+        {/* Image Modal */}
+        <ImageModal
+          isOpen={selectedImage !== null}
+          onClose={() => setSelectedImage(null)}
+          imageSrc={selectedImage?.src || ''}
+          alt={selectedImage?.alt}
+        />
       </div>
     );
   }
@@ -127,9 +138,11 @@ export const FastBlockRenderer: React.FC<FastBlockRendererProps> = ({ content, c
                           margin: '10px 0',
                           height: 'auto',
                           borderRadius: '8px',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                          cursor: 'pointer'
                         }}
                         loading="lazy"
+                        onClick={() => setSelectedImage({ src, alt: block.alt || 'Generated illustration' })}
                       />
                     );
                   })}
@@ -150,9 +163,11 @@ export const FastBlockRenderer: React.FC<FastBlockRendererProps> = ({ content, c
                     margin: '10px 0',
                     height: 'auto',
                     borderRadius: '8px',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                    cursor: 'pointer'
                   }}
                   loading="lazy"
+                  onClick={() => setSelectedImage({ src, alt: block.alt || 'Generated illustration' })}
                 />
               );
             }
@@ -163,10 +178,18 @@ export const FastBlockRenderer: React.FC<FastBlockRendererProps> = ({ content, c
         {/* Render YouTube cards if present */}
         {videos && (
           <div style={{ marginTop: '24px' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '500', color: 'var(--text-primary)', marginBottom: '12px' }}>📺 Related Videos</h3>
+            <h3 style={{ fontSize: '18px', fontWeight: '500', color: 'var(--text-primary)', marginBottom: '12px' }}>Related Videos</h3>
             <YouTubeCards videos={videos} remainingVideos={remainingVideos} />
           </div>
         )}
+        
+        {/* Image Modal */}
+        <ImageModal
+          isOpen={selectedImage !== null}
+          onClose={() => setSelectedImage(null)}
+          imageSrc={selectedImage?.src || ''}
+          alt={selectedImage?.alt}
+        />
       </div>
     );
   } catch (error) {
@@ -193,10 +216,18 @@ export const FastBlockRenderer: React.FC<FastBlockRendererProps> = ({ content, c
         {/* Render YouTube cards if present */}
         {videos && (
           <div style={{ marginTop: '24px' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '500', color: 'var(--text-primary)', marginBottom: '12px' }}>📺 Related Videos</h3>
+            <h3 style={{ fontSize: '18px', fontWeight: '500', color: 'var(--text-primary)', marginBottom: '12px' }}>Related Videos</h3>
             <YouTubeCards videos={videos} remainingVideos={remainingVideos} />
           </div>
         )}
+        
+        {/* Image Modal */}
+        <ImageModal
+          isOpen={selectedImage !== null}
+          onClose={() => setSelectedImage(null)}
+          imageSrc={selectedImage?.src || ''}
+          alt={selectedImage?.alt}
+        />
       </div>
     );
   }

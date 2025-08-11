@@ -11,10 +11,14 @@ import {
   Menu,
   LogOut,
   UserCircle,
-  Brain
+  Brain,
+  UserPlus,
+  Users
 } from 'lucide-react';
 import { useChatContext } from '../contexts/ChatContext';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { CreateUserModal } from './ui/CreateUserModal';
+import { SwitchUserModal } from './ui/SwitchUserModal';
 
 const formatChatDate = (date: Date): string => {
   const now = new Date();
@@ -38,7 +42,10 @@ const formatChatDate = (date: Date): string => {
 };
 
 const getTimeOfDayGreeting = (): string => {
-  const hour = new Date().getHours();
+  // Get current time in IST (Indian Standard Time - UTC+5:30)
+  const now = new Date();
+  const istTime = new Date(now.getTime() + (5.5 * 60 * 60 * 1000)); // Add 5.5 hours to UTC
+  const hour = istTime.getUTCHours();
   
   if (hour < 12) {
     const morningMessages = ['Coffee Time', 'Sunny Start', "Let's Start", "Sun's Out"];
@@ -61,12 +68,19 @@ export const Sidebar: React.FC = () => {
     selectChat, 
     deleteChat, 
     toggleSidebar, 
-    setDashboard 
+    setDashboard,
+    createUser,
+    setCurrentUser
   } = useChatContext();
   const location = useLocation();
   const navigate = useNavigate();
   
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [showCreateUserModal, setShowCreateUserModal] = useState(false);
+  const [showSwitchUserModal, setShowSwitchUserModal] = useState(false);
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
+  const [isSwitchingUser, setIsSwitchingUser] = useState(false);
+  const [notification, setNotification] = useState<string | null>(null);
 
   const handleNewChat = () => {
     // If we're not on the main page, navigate there first
@@ -107,6 +121,38 @@ export const Sidebar: React.FC = () => {
     // Add profile logic here
     console.log('Profile clicked');
     setShowSettingsMenu(false);
+  };
+
+  const handleCreateUser = async (name: string) => {
+    setIsCreatingUser(true);
+    try {
+      const userData = await createUser(name);
+      setNotification(`User "${userData.name}" created successfully!`);
+      setTimeout(() => setNotification(null), 3000);
+      setShowCreateUserModal(false);
+    } catch (error) {
+      console.error('Failed to create user:', error);
+      setNotification('Failed to create user. Please try again.');
+      setTimeout(() => setNotification(null), 3000);
+    } finally {
+      setIsCreatingUser(false);
+    }
+  };
+
+  const handleSwitchUser = async (user: any) => {
+    setIsSwitchingUser(true);
+    try {
+      setCurrentUser(user);
+      setNotification(`Switched to user "${user.name}"`);
+      setTimeout(() => setNotification(null), 3000);
+      setShowSwitchUserModal(false);
+    } catch (error) {
+      console.error('Failed to switch user:', error);
+      setNotification('Failed to switch user. Please try again.');
+      setTimeout(() => setNotification(null), 3000);
+    } finally {
+      setIsSwitchingUser(false);
+    }
   };
 
   return (
@@ -225,7 +271,6 @@ export const Sidebar: React.FC = () => {
                       {state.sidebarCollapsed ? (
                         <div className="flex flex-col items-center gap-1">
                           <MessageSquare className="w-4 h-4 text-text-secondary" />
-                          <div className="w-1 h-1 rounded-full bg-brand-primary" />
                         </div>
                       ) : (
                         <div className="flex items-start justify-between">
@@ -293,18 +338,24 @@ export const Sidebar: React.FC = () => {
                   {showSettingsMenu && (
                     <div className="absolute bottom-full right-0 mb-2 w-48 bg-surface-elevated border border-input-border rounded-lg shadow-lg overflow-hidden z-10">
                       <button
-                        onClick={handleProfile}
+                        onClick={() => {
+                          setShowCreateUserModal(true);
+                          setShowSettingsMenu(false);
+                        }}
                         className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-button-secondary transition-colors duration-fast"
                       >
-                        <UserCircle className="w-4 h-4 text-text-secondary" />
-                        <span className="text-sm text-text-primary">Profile</span>
+                        <UserPlus className="w-4 h-4 text-text-secondary" />
+                        <span className="text-sm text-text-primary">Create New User</span>
                       </button>
                       <button
-                        onClick={handleLogout}
+                        onClick={() => {
+                          setShowSwitchUserModal(true);
+                          setShowSettingsMenu(false);
+                        }}
                         className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-button-secondary transition-colors duration-fast"
                       >
-                        <LogOut className="w-4 h-4 text-danger" />
-                        <span className="text-sm text-danger">Logout</span>
+                        <Users className="w-4 h-4 text-text-secondary" />
+                        <span className="text-sm text-text-primary">Switch User</span>
                       </button>
                     </div>
                   )}
@@ -324,6 +375,30 @@ export const Sidebar: React.FC = () => {
           onClick={toggleSidebar}
         />
       )}
+
+      {/* Notification */}
+      {notification && (
+        <div className="fixed top-4 right-4 bg-brand-primary text-white px-4 py-2 rounded-lg shadow-lg z-50 animate-fade-in">
+          {notification}
+        </div>
+      )}
+
+      {/* Create User Modal */}
+      <CreateUserModal
+        isOpen={showCreateUserModal}
+        onClose={() => !isCreatingUser && setShowCreateUserModal(false)}
+        onCreateUser={handleCreateUser}
+        isCreating={isCreatingUser}
+      />
+
+      {/* Switch User Modal */}
+      <SwitchUserModal
+        isOpen={showSwitchUserModal}
+        onClose={() => !isSwitchingUser && setShowSwitchUserModal(false)}
+        onSwitchUser={handleSwitchUser}
+        currentUsername={state.currentUser.username}
+        isLoading={isSwitchingUser}
+      />
 
     </>
   );

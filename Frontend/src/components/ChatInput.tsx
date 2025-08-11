@@ -213,7 +213,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ centered = false, onMessag
   const ModeIcon = getModeIcon();
 
   return (
-    <div className={`relative ${centered ? 'w-full max-w-2xl mx-auto' : 'w-[calc(100%-32px)] mx-auto'}`}>
+    <div className={`relative ${centered ? 'w-full max-w-2xl mx-auto' : 'w-full max-w-4xl mx-auto'}`}>
       <form onSubmit={handleSubmit} className="relative">
         <div 
           className={`relative flex items-end gap-3 rounded-3xl transition-all duration-200 ease-out transform backdrop-blur-md ${

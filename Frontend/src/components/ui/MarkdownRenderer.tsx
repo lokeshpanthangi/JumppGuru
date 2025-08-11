@@ -2,15 +2,17 @@ import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { CodeBlock } from './CodeBlock';
 import { YouTubeCards, parseYouTubeCards } from './YouTubeCards';
+import { ImageModal } from './ImageModal';
 
 // New ImageRenderer component for proper base64 and URL image handling
 interface ImageRendererProps {
   src?: string;
   alt?: string;
   title?: string;
+  onImageClick?: (src: string, alt: string) => void;
 }
 
-const ImageRenderer: React.FC<ImageRendererProps> = ({ src, alt, title }) => {
+const ImageRenderer: React.FC<ImageRendererProps> = ({ src, alt, title, onImageClick }) => {
   const [imageState, setImageState] = useState<'loading' | 'loaded' | 'error'>('loading');
   const [processedSrc, setProcessedSrc] = useState<string>('');
 
@@ -86,7 +88,7 @@ const ImageRenderer: React.FC<ImageRendererProps> = ({ src, alt, title }) => {
             alt={alt || 'Generated image'}
             title={title}
             loading="lazy"
-            className={`max-w-[50%] h-auto rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 transition-opacity duration-300 ${
+            className={`max-w-[50%] h-auto rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 transition-opacity duration-300 cursor-pointer hover:opacity-90 ${
               imageState === 'loaded' ? 'opacity-100' : 'opacity-0 absolute inset-0'
             }`}
             style={{ 
@@ -96,6 +98,7 @@ const ImageRenderer: React.FC<ImageRendererProps> = ({ src, alt, title }) => {
             }}
             onLoad={handleImageLoad}
             onError={handleImageError}
+            onClick={() => onImageClick && onImageClick(processedSrc, alt || 'Generated image')}
           />
         )}
       </div>
@@ -119,6 +122,8 @@ interface MarkdownRendererProps {
 }
 
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className }) => {
+  const [selectedImage, setSelectedImage] = useState<{ src: string; alt: string } | null>(null);
+  
   // Parse YouTube cards from content
   const { content: cleanedContent, videos, remainingVideos } = parseYouTubeCards(content);
 
@@ -275,7 +280,12 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
           img({ src, alt, title }) {
             // Ensure src is a string; ReactMarkdown might pass null/undefined in some cases
             const safeSrc = typeof src === 'string' ? src : '';
-            return <ImageRenderer src={safeSrc} alt={alt} title={title} />;
+            return <ImageRenderer 
+              src={safeSrc} 
+              alt={alt} 
+              title={title} 
+              onImageClick={(imgSrc, imgAlt) => setSelectedImage({ src: imgSrc, alt: imgAlt })} 
+            />;
           },
         }}
       >
@@ -285,10 +295,18 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
       {/* Render YouTube cards if present */}
       {videos && (
         <div className="mt-6">
-          <h3 className="text-lg font-medium text-text-primary mb-3">📺 Related Videos</h3>
+          <h3 className="text-lg font-medium text-text-primary mb-3">Related Videos</h3>
           <YouTubeCards videos={videos} remainingVideos={remainingVideos} />
         </div>
       )}
+      
+      {/* Image Modal */}
+      <ImageModal
+        isOpen={selectedImage !== null}
+        onClose={() => setSelectedImage(null)}
+        imageSrc={selectedImage?.src || ''}
+        alt={selectedImage?.alt}
+      />
     </div>
   );
 };
