@@ -6,6 +6,8 @@ from app.api.youtube_router import router as youtube_router
 from app.api import users
 from app.api import tts_router
 from fastapi.middleware.cors import CORSMiddleware
+from app.api.youtube_learning_router import router as youtube_learning_router  # Add this import
+
 
 app = FastAPI(
     title="JumppGuru",
@@ -26,10 +28,12 @@ app.include_router(api_router)
 app.include_router(deep_learning_router)
 app.include_router(genai_router)
 app.include_router(youtube_router)
+app.include_router(youtube_learning_router)
 app.include_router(tts_router.router)
 app.include_router(users.router)
 
 @app.get("/ping")
 async def ping():
     return {"message": "pong"}
+
 
