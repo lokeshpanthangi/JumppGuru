@@ -40,7 +40,7 @@ export const ImageModal: React.FC<ImageModalProps> = ({ isOpen, onClose, imageSr
       </button>
       
       {/* Image */}
-      <div className="relative max-w-[80vw] max-h-[80vh] flex items-center justify-center">
+      <div className="relative max-w-[50vw] max-h-[50vh] flex items-center justify-center">
         <img
           src={imageSrc}
           alt={alt || 'Image'}

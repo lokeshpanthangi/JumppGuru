@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 from typing import List, Dict
 from app.db.mongodb import multimodal_chat_collection
+from app.db.mongodb import mongo_collection
+from datetime import datetime
 
 load_dotenv()
 
@@ -16,6 +18,8 @@ SERPAPI_URL = "https://serpapi.com/search.json"
 
 
 class YouTubeLinksRequest(BaseModel):
+    user_id: str
+    page: int
     chat_id: str
     videos: List[Dict]
 
@@ -66,11 +70,17 @@ async def recommend_videos(q: str = Query(..., description="User query")):
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 
+from datetime import datetime
+from fastapi import HTTPException
+
 @router.post("/update_youtube_links")
 async def update_youtube_links(payload: YouTubeLinksRequest):
     """
-    Update the youtube_links for the given chat_id and role='user'.
+    Update the youtube_links for the given chat_id and role='user',
+    then save relevant details to mongo_collection.
     """
+
+    # Step 1: Update youtube_links in multimodal_chat_collection
     result = multimodal_chat_collection.update_one(
         {"chat_id": payload.chat_id, "role": "user"},
         {"$set": {"youtube_links": payload.videos}}
@@ -79,8 +89,48 @@ async def update_youtube_links(payload: YouTubeLinksRequest):
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Chat not found for given chat_id and role=user.")
 
+    # Step 2: Fetch user document
+    user_doc = multimodal_chat_collection.find_one(
+        {"chat_id": payload.chat_id, "role": "user"},
+        {"user_id": 1, "text_content": 1, "youtube_links": 1, "generated_mcq_questions": 1}
+    )
+
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User chat document not found.")
+
+    # Step 3: Fetch assistant document
+    assistant_doc = multimodal_chat_collection.find_one(
+        {"chat_id": payload.chat_id, "role": "assistant"},
+        {"content": 1}
+    )
+
+    if not assistant_doc:
+        raise HTTPException(status_code=404, detail="Assistant chat document not found.")
+
+    # Step 4: Prepare fields
+    user_id = user_doc.get("user_id")
+    query = user_doc.get("text_content")
+    youtube_links = user_doc.get("youtube_links", [])
+    generated_mcq_ques = user_doc.get("generated_mcq_questions", [])
+    response = assistant_doc.get("content", [])
+
+    # Step 5: Save into mongo_collection
+    try:
+        mongo_collection.insert_one({
+            "user_id": user_id,
+            "page": payload.page,
+            "timestamp": datetime.utcnow(),
+            "chat_id": payload.chat_id,
+            "query": query,
+            "response": response,
+            "youtube_links": youtube_links,
+            "generated_mcq_questions": generated_mcq_ques,
+            "LLM_model": "gemini",
+        })
+    except Exception as e:
+        print(f"Failed to insert into MongoDB: {e}")
+        raise HTTPException(status_code=500, detail="Error saving to mongo_collection")
+
     return {
-        "message": "YouTube links updated successfully.",
-        # "chat_id": payload.chat_id,
-        # "count": len(payload.videos)
+        "message": "YouTube links updated and details saved successfully."
     }

@@ -36,7 +36,7 @@ async def tts_stream_internal(text: str, output_path: str):
             logger.info("WebSocket connection established")
             
             # Configure the TTS settings
-            await ws.configure(target_language_code="hi-IN", speaker="anushka")
+            await ws.configure(target_language_code="hi-IN", speaker="abhilash", pitch=0, pace=1, loudness=1, speech_sample_rate=22050)
             logger.info("TTS configuration set: hi-IN, anushka")
             
             # Send the text for conversion
@@ -118,7 +118,7 @@ async def process_single_chunk(chunk_text: str, chunk_index: int, chat_id: str, 
             client = AsyncSarvamAI(api_subscription_key=os.getenv("SARVAM_API_KEY"))
             
             async with client.text_to_speech_streaming.connect(model="bulbul:v2") as ws:
-                await ws.configure(target_language_code="hi-IN", speaker="anushka")
+                await ws.configure(target_language_code="hi-IN", speaker="abhilash", pitch=0, pace=1, loudness=1, speech_sample_rate=22050)
                 await ws.convert(chunk_text)
                 await ws.flush()
                 

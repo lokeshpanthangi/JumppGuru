@@ -28,9 +28,11 @@ interface Block {
 interface FastBlockRendererProps {
   content: string;
   className?: string;
+  playgroundMode?: boolean;
+  onVideoSelectForPlayground?: (video: any) => void;
 }
 
-export const FastBlockRenderer: React.FC<FastBlockRendererProps> = ({ content, className }) => {
+export const FastBlockRenderer: React.FC<FastBlockRendererProps> = ({ content, className, playgroundMode, onVideoSelectForPlayground }) => {
   const [selectedImage, setSelectedImage] = useState<{ src: string; alt: string } | null>(null);
   
   // Parse YouTube cards from content
@@ -63,7 +65,12 @@ export const FastBlockRenderer: React.FC<FastBlockRendererProps> = ({ content, c
         {videos && (
           <div style={{ marginTop: '24px' }}>
             <h3 style={{ fontSize: '18px', fontWeight: '500', color: 'var(--text-primary)', marginBottom: '12px' }}>Related Videos</h3>
-            <YouTubeCards videos={videos} remainingVideos={remainingVideos} />
+            <YouTubeCards 
+              videos={videos} 
+              remainingVideos={remainingVideos}
+              playgroundMode={playgroundMode}
+              onVideoSelectForPlayground={onVideoSelectForPlayground}
+            />
           </div>
         )}
         
@@ -179,7 +186,12 @@ export const FastBlockRenderer: React.FC<FastBlockRendererProps> = ({ content, c
         {videos && (
           <div style={{ marginTop: '24px' }}>
             <h3 style={{ fontSize: '18px', fontWeight: '500', color: 'var(--text-primary)', marginBottom: '12px' }}>Related Videos</h3>
-            <YouTubeCards videos={videos} remainingVideos={remainingVideos} />
+            <YouTubeCards 
+              videos={videos} 
+              remainingVideos={remainingVideos}
+              playgroundMode={playgroundMode}
+              onVideoSelectForPlayground={onVideoSelectForPlayground}
+            />
           </div>
         )}
         
@@ -217,7 +229,12 @@ export const FastBlockRenderer: React.FC<FastBlockRendererProps> = ({ content, c
         {videos && (
           <div style={{ marginTop: '24px' }}>
             <h3 style={{ fontSize: '18px', fontWeight: '500', color: 'var(--text-primary)', marginBottom: '12px' }}>Related Videos</h3>
-            <YouTubeCards videos={videos} remainingVideos={remainingVideos} />
+            <YouTubeCards 
+              videos={videos} 
+              remainingVideos={remainingVideos}
+              playgroundMode={playgroundMode}
+              onVideoSelectForPlayground={onVideoSelectForPlayground}
+            />
           </div>
         )}
         

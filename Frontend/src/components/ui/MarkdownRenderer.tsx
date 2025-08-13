@@ -128,7 +128,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
   const { content: cleanedContent, videos, remainingVideos } = parseYouTubeCards(content);
 
   return (
-    <div className={`prose max-w-none ${className || ''}`}>
+    <div className={`prose max-w-none prose-slate dark:prose-invert ${className || ''}`}>
       <ReactMarkdown
         urlTransform={(url: string) => {
           // Allow data URLs for base64 images
@@ -151,7 +151,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
               </CodeBlock>
             );
           },
-          // Custom paragraph renderer
+          // Custom paragraph renderer with better spacing
           p({ children }) {
             return (
               <p className="text-text-primary leading-relaxed mb-4 last:mb-0">

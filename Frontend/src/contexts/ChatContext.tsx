@@ -46,6 +46,7 @@ type ChatState = {
   isLiveMode: boolean;
   loadingState: string | null;
   currentPage: number;
+  hasInitializedUser: boolean; // Track if user has been initialized
 };
 
 type ChatAction =
@@ -63,6 +64,7 @@ type ChatAction =
   | { type: 'SET_DASHBOARD'; show: boolean }
   | { type: 'SET_USER_NAME'; name: string }
   | { type: 'SET_CURRENT_USER'; user: UserData }
+  | { type: 'SET_USER_INITIALIZED'; initialized: boolean }
   | { type: 'SET_TYPING'; isTyping: boolean }
   | { type: 'SET_MODE'; mode: ChatMode }
   | { type: 'TOGGLE_AURORA' }
@@ -89,6 +91,7 @@ const initialState: ChatState = {
   isLiveMode: false,
   loadingState: null,
   currentPage: 1,
+  hasInitializedUser: false,
 };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -308,6 +311,12 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         userName: action.user.name 
       };
     
+    case 'SET_USER_INITIALIZED':
+      return {
+        ...state,
+        hasInitializedUser: action.initialized
+      };
+    
     case 'SET_TYPING':
       return { ...state, isTyping: action.isTyping };
     
@@ -385,10 +394,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       try {
         const userData: UserData = JSON.parse(savedUser);
         dispatch({ type: 'SET_CURRENT_USER', user: userData });
+        dispatch({ type: 'SET_USER_INITIALIZED', initialized: true });
       } catch (error) {
         console.error('Error loading user from localStorage:', error);
         localStorage.removeItem('currentUser');
+        dispatch({ type: 'SET_USER_INITIALIZED', initialized: true });
       }
+    } else {
+      dispatch({ type: 'SET_USER_INITIALIZED', initialized: true });
     }
   }, []);
 
@@ -418,7 +431,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       const historyData = await response.json();
       console.log('📚 Chat History Response:', historyData);
 
-      // Handle case where user has no history
+      // Handle direct history array format
       if (!historyData.history || !Array.isArray(historyData.history) || historyData.history.length === 0) {
         console.log('📭 User has no chat history');
         return;
@@ -508,9 +521,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         
         // Update current page to the highest page number if we have history
         const maxPage = historicalChats.reduce((max, chat) => Math.max(max, chat.page), 0);
-        dispatch({ type: 'SET_CURRENT_PAGE', page: maxPage });
+        dispatch({ type: 'SET_CURRENT_PAGE', page: maxPage + 1 }); // +1 for the next new chat
         
-        console.log(`📄 Set current page to: ${maxPage}`);
+        console.log(`📄 Set current page to: ${maxPage + 1}`);
       } else {
         console.log('📭 No valid chats found in history');
       }
@@ -604,6 +617,20 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           return res.json();
         });
 
+        // Create AI message for streaming
+        const aiMessage: Message = {
+          id: aiMessageId,
+          content: '',
+          type: 'ai',
+          timestamp: new Date(),
+          mode: 'research',
+          isStreaming: true,
+          isCurrentlyGenerating: true,
+          page: state.currentPage,
+        };
+        dispatch({ type: 'ADD_MESSAGE', chatId, message: aiMessage });
+
+        // Start YouTube API call in parallel
         const youtubePromise = fetch(`${BACKEND_URL}/youtube/recommend?q=${encodeURIComponent(content.trim())}`, {
           method: 'GET',
           headers: {
@@ -718,6 +745,236 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           messageId: aiMessageId,
           content: genaiContent + youtubeContent
         });
+        // Handle SSE streaming for GenAI
+        try {
+          const response = await fetch(`${BACKEND_URL}/genai/generate`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              user_id: userId,
+              query: content.trim(),
+              lang: 'auto',
+              max_images: 3,
+              page: state.currentPage
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error(`GenAI API failed: ${response.status}`);
+          }
+
+          const reader = response.body?.getReader();
+          if (!reader) {
+            throw new Error('Stream not available');
+          }
+
+          const decoder = new TextDecoder();
+          let currentTextContent = '';
+          let orderedBlocks: any[] = [];
+          let backendChatId: string | null = null;
+          let buffer = '';
+
+          const processData = (data: any) => {
+            console.log('📡 SSE Event:', data);
+            
+            switch (data.type) {
+              case 'init':
+                backendChatId = data.chat_id;
+                console.log('✅ Backend chat_id extracted:', backendChatId);
+                if (backendChatId) {
+                  dispatch({ type: 'SET_BACKEND_CHAT_ID', chatId, backendChatId });
+                }
+                break;
+                
+              case 'text_chunk':
+                currentTextContent += data.content;
+                // Update the last text block or create a new one
+                const currentBlocks = [...orderedBlocks];
+                
+                // If the last block is text, update it; otherwise create a new text block
+                if (currentBlocks.length > 0 && currentBlocks[currentBlocks.length - 1].type === 'text') {
+                  currentBlocks[currentBlocks.length - 1].content = currentTextContent;
+                } else {
+                  currentBlocks.push({ type: 'text', content: currentTextContent });
+                }
+                
+                dispatch({
+                  type: 'UPDATE_MESSAGE',
+                  chatId,
+                  messageId: aiMessageId,
+                  content: `<BLOCKS_DATA>${JSON.stringify(currentBlocks)}</BLOCKS_DATA>`
+                });
+                break;
+                
+              case 'image_loading':
+                console.log('🖼️ Image loading:', data.message);
+                break;
+                
+              case 'image_complete':
+                console.log('🖼️ Image complete:', data.content);
+                
+                // Add current text as a block if we have any
+                if (currentTextContent.trim()) {
+                  orderedBlocks.push({ type: 'text', content: currentTextContent });
+                  currentTextContent = ''; // Reset for next text chunk
+                }
+                
+                // Add the image block at the current position
+                orderedBlocks.push(data.content);
+                
+                dispatch({
+                  type: 'UPDATE_MESSAGE',
+                  chatId,
+                  messageId: aiMessageId,
+                  content: `<BLOCKS_DATA>${JSON.stringify(orderedBlocks)}</BLOCKS_DATA>`
+                });
+                break;
+                
+              case 'complete':
+                console.log('✅ Streaming complete');
+                // Finalize with text block if there's remaining content
+                if (currentTextContent.trim()) {
+                  orderedBlocks.push({ type: 'text', content: currentTextContent });
+                }
+                return true; // Signal completion
+                
+              case 'error':
+              case 'fatal_error':
+                console.error('❌ Streaming error:', data.message);
+                currentTextContent += `\n\n⚠️ ${data.message}`;
+                // Update with error message
+                const errorBlocks = [...orderedBlocks, { type: 'text', content: currentTextContent }];
+                dispatch({
+                  type: 'UPDATE_MESSAGE',
+                  chatId,
+                  messageId: aiMessageId,
+                  content: `<BLOCKS_DATA>${JSON.stringify(errorBlocks)}</BLOCKS_DATA>`
+                });
+                
+                if (data.type === 'fatal_error') {
+                  return true; // Signal completion
+                }
+                break;
+            }
+            return false;
+          };
+
+          // Process the stream
+          while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) {
+              console.log('📡 Stream ended');
+              break;
+            }
+
+            // Add new chunk to buffer
+            buffer += decoder.decode(value, { stream: true });
+            
+            // Process complete lines
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // Keep incomplete line in buffer
+            
+            for (const line of lines) {
+              if (line.trim() === '') continue;
+              
+              if (line.startsWith('data: ')) {
+                try {
+                  const dataStr = line.slice(6).trim();
+                  if (dataStr === '') continue;
+                  
+                  const data = JSON.parse(dataStr);
+                  const isComplete = processData(data);
+                  
+                  if (isComplete) {
+                    break;
+                  }
+                } catch (e) {
+                  console.error('❌ Error parsing SSE data:', e, 'Line:', line);
+                }
+              }
+            }
+          }
+
+          // Wait for YouTube response and update the existing message
+          const youtubeResponse = await youtubePromise.catch(error => ({ error }));
+          console.log('🎥 Full YouTube Response:', youtubeResponse);
+          
+          // Call YouTube update API if we have both chat_id and YouTube videos
+          if (backendChatId && youtubeResponse.videos && Array.isArray(youtubeResponse.videos)) {
+            try {
+              const updateResponse = await fetch(`${BACKEND_URL}/youtube/update_youtube_links`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  user_id: userId,
+                  page: state.currentPage,
+                  chat_id: backendChatId,
+                  videos: youtubeResponse.videos
+                })
+              });
+              
+              if (updateResponse.ok) {
+                console.log('✅ YouTube links successfully stored in database');
+              } else {
+                console.error('❌ Failed to update YouTube links:', updateResponse.status);
+              }
+            } catch (error) {
+              console.error('💥 Error calling YouTube update API:', error);
+            }
+          }
+          
+          let youtubeContent = '';
+          if (youtubeResponse.error) {
+            console.error('YouTube API Error:', youtubeResponse.error);
+            youtubeContent = '\n\n## Related Videos\n\n⚠️ Video recommendations temporarily unavailable.';
+          } else if (youtubeResponse.videos && Array.isArray(youtubeResponse.videos)) {
+            // Show only first 3 videos by default
+            const limitedVideos = youtubeResponse.videos.slice(0, 3);
+            const remainingVideos = youtubeResponse.videos.slice(3);
+            
+            youtubeContent = `\n\n<youtube-cards>${JSON.stringify({
+              videos: limitedVideos,
+              remainingVideos: remainingVideos
+            })}</youtube-cards>`;
+          }
+
+          // Update the final message with YouTube content
+          let finalContent = '';
+          if (orderedBlocks.length > 0) {
+            finalContent = `<BLOCKS_DATA>${JSON.stringify(orderedBlocks)}</BLOCKS_DATA>`;
+          } else if (currentTextContent) {
+            finalContent = currentTextContent;
+          } else {
+            finalContent = '⚠️ No content received from the server.';
+          }
+
+          dispatch({
+            type: 'UPDATE_MESSAGE',
+            chatId,
+            messageId: aiMessageId,
+            content: finalContent + youtubeContent
+          });
+
+          // Mark streaming as complete
+          dispatch({ type: 'SET_MESSAGE_STREAMING', chatId, messageId: aiMessageId, isStreaming: false });
+          dispatch({ type: 'SET_CURRENTLY_GENERATING', chatId, messageId: null });
+
+        } catch (error) {
+          console.error('GenAI Streaming Error:', error);
+          dispatch({
+            type: 'UPDATE_MESSAGE',
+            chatId,
+            messageId: aiMessageId,
+            content: '⚠️ Failed to generate content. Please try again.'
+          });
+          dispatch({ type: 'SET_MESSAGE_STREAMING', chatId, messageId: aiMessageId, isStreaming: false });
+          dispatch({ type: 'SET_CURRENTLY_GENERATING', chatId, messageId: null });
+        }
 
         // Mark research mode as used for this chat
         dispatch({ type: 'SET_RESEARCH_MODE_USED', chatId });
@@ -826,9 +1083,22 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   };
 
   const setCurrentUser = (user: UserData) => {
+    // Check if we're switching to a different user (and the app has been initialized)
+    const isUserChange = state.hasInitializedUser && 
+                         state.currentUser.username !== user.username && 
+                         state.currentUser.username !== '';
+    
     dispatch({ type: 'SET_CURRENT_USER', user });
     // Save to localStorage
     localStorage.setItem('currentUser', JSON.stringify(user));
+    
+    // Reload the page if switching to a different user (but not on initial load)
+    if (isUserChange) {
+      console.log(`🔄 User changed from "${state.currentUser.username}" to "${user.username}" - reloading page`);
+      setTimeout(() => {
+        window.location.reload();
+      }, 500); // Small delay to show the switch notification
+    }
   };
 
   const createUser = async (name: string): Promise<UserData> => {
@@ -849,8 +1119,21 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
       const userData: UserData = await response.json();
       
+      // Check if we're creating a different user (not the initial empty user)
+      const isNewUserCreation = state.hasInitializedUser && 
+                                state.currentUser.username !== userData.username && 
+                                state.currentUser.username !== '';
+      
       // Save to localStorage and set as current user
       setCurrentUser(userData);
+      
+      // If this is a new user creation (not initial setup), reload the page
+      if (isNewUserCreation) {
+        console.log(`🔄 New user "${userData.username}" created - reloading page`);
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000); // Slightly longer delay to show the creation success message
+      }
       
       return userData;
     } catch (error) {

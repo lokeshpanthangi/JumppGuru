@@ -8,7 +8,7 @@ from app.db.mongodb import mongo_collection
 from app.services.vector_search import query_rag_chunks
 from app.services.web_fallback import web_fallback_answer
 from app.services.chat_history import save_message, get_recent_messages, get_assistant_text_by_chat_id
-
+from datetime import datetime
 
 # Load environment variables from .env file, if present
 load_dotenv()
@@ -54,9 +54,15 @@ async def generate_llm_response(query: str, user_lang: str, history, additional_
         "Use conversational, easy-to-understand tone. Avoid technical jargon."
     ).format(**values)
 
-    messages = [{"role": "system", "content": system_prompt}] +  history + additional_history + [
-        {"role": "user", "content": query}
-    ]
+    messages = [{"role": "system", "content": system_prompt}]
+    if additional_history:
+        messages = [{"role": "system", "content": system_prompt}] +  history + additional_history + [
+            {"role": "user", "content": query}
+        ]
+    else:
+        messages = [{"role": "system", "content": system_prompt}] + history + [
+            {"role": "user", "content": query}
+        ]
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
@@ -71,6 +77,7 @@ async def handle_user_query(payload: QueryRequest) -> QueryResponse:
 
     Decides direct answer via LLM or returns a placeholder for future RAG/Search functionality.
     """
+    page = payload.page
     query = payload.query
     mode = payload.mode or "general"
     user_lang = payload.lang or detect_language(query)
@@ -86,36 +93,42 @@ async def handle_user_query(payload: QueryRequest) -> QueryResponse:
 
     # Decide between direct LLM answer or Search (future implementation)
     # if is_direct_answer(query):
-    script_text = await generate_llm_response(query, user_lang, history, additional_history)
-    source = "LLM"
-    # else:
-    #     # Placeholder message for more complex queries requiring search
-    #     script_text = "This query requires search (RAG/Web), which is coming next."
-    #     source = "Search"
+    if mode == "general" :
+        # Generate LLM response directly
+        script_text = await generate_llm_response(query, user_lang, history, additional_history)
+        source = "LLM"
+    else:
+        # Placeholder message for more complex queries requiring search
+        script_text = "This query requires search (RAG/Web), which is coming next."
+        source = "Search"
 
-    #     # BASIC RAG
-    #     chunks = await query_rag_chunks(query)
+        # BASIC RAG
+        chunks = await query_rag_chunks(query, 6, 0.8)
 
-    #     if chunks:
-    #         context = "\n".join([c["text"] for c in chunks])
-    #         prompt = f"""Use the following context to answer clearly:\n\n{context}\n\nQuestion: {query}"""
-    #         messages = [{"role": "system", "content": "Be clear, educational."}] + history + [
-    #             {"role": "user", "content": prompt}
-    #         ]
+        if chunks:
+            context = "\n".join([c["text"] for c in chunks])
+            prompt = f"""Use the following context to answer clearly:\n\n{context}\n\nQuestion: {query}"""
+            messages = [{"role": "system", "content": "Be clear, educational."}]
+            if additional_history:
+                messages = [{"role": "system", "content": "Be clear, educational."}] + history + additional_history + [
+                {"role": "user", "content": prompt}]
+            else:
+                messages = [{"role": "system", "content": "Be clear, educational."}] + history + [
+                {"role": "user", "content": prompt}]
 
-    #         response = client.chat.completions.create(
-    #             model="gpt-4o-mini",
-    #             messages=messages
-    #         )
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages
+            )
 
-    #         script_text = response.choices[0].message.content
-    #         source = "RAG"
-    #     else:
-    #         # script_text = "No educational content found. Web fallback not yet implemented."
-    #         # source = "RAG-Miss"
-    #         # Web fallback (if no good RAG chunks)
-    #         script_text = await web_fallback_answer(query, history)
-    #         source = "Web"
+            script_text = response.choices[0].message.content
+            source = "RAG"
+        else:
+            # script_text = "No educational content found. Web fallback not yet implemented."
+            # source = "RAG-Miss"
+            # Web fallback (if no good RAG chunks)
+            script_text = await web_fallback_answer(query, history)
+            source = "Web"
 
 
     # Save both user query & assistant reply in chat history
@@ -126,10 +139,14 @@ async def handle_user_query(payload: QueryRequest) -> QueryResponse:
     try:
         mongo_collection.insert_one({
             "user_id": user_id,
+            "page": page,
+            "timestamp": datetime.utcnow(),
+            "chat_id": chat_id,
             "query": query,
             "response": script_text,
-            "language": user_lang,
-            "source": source
+            "LLM_model": "gpt",
+            # "language": user_lang,
+            # "source": source
         })
     except Exception as e:
         print(f"Failed to insert into MongoDB: {e}")

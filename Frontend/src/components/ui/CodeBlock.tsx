@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, Code2, Terminal } from 'lucide-react';
 
 interface CodeBlockProps {
   children: string;
@@ -22,37 +22,72 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ children, className, inlin
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Inline code styling
+  // Get language display name and icon
+  const getLanguageInfo = (lang: string) => {
+    const langMap: { [key: string]: { name: string; icon: React.ReactNode; color: string } } = {
+      javascript: { name: 'JavaScript', icon: <Code2 className="w-3 h-3" />, color: 'bg-yellow-500' },
+      typescript: { name: 'TypeScript', icon: <Code2 className="w-3 h-3" />, color: 'bg-blue-500' },
+      python: { name: 'Python', icon: <Code2 className="w-3 h-3" />, color: 'bg-green-500' },
+      jsx: { name: 'React JSX', icon: <Code2 className="w-3 h-3" />, color: 'bg-cyan-500' },
+      tsx: { name: 'React TSX', icon: <Code2 className="w-3 h-3" />, color: 'bg-cyan-600' },
+      html: { name: 'HTML', icon: <Code2 className="w-3 h-3" />, color: 'bg-orange-500' },
+      css: { name: 'CSS', icon: <Code2 className="w-3 h-3" />, color: 'bg-blue-400' },
+      json: { name: 'JSON', icon: <Code2 className="w-3 h-3" />, color: 'bg-gray-500' },
+      bash: { name: 'Bash', icon: <Terminal className="w-3 h-3" />, color: 'bg-gray-700' },
+      sh: { name: 'Shell', icon: <Terminal className="w-3 h-3" />, color: 'bg-gray-700' },
+      sql: { name: 'SQL', icon: <Code2 className="w-3 h-3" />, color: 'bg-indigo-500' },
+      java: { name: 'Java', icon: <Code2 className="w-3 h-3" />, color: 'bg-red-500' },
+      cpp: { name: 'C++', icon: <Code2 className="w-3 h-3" />, color: 'bg-blue-600' },
+      c: { name: 'C', icon: <Code2 className="w-3 h-3" />, color: 'bg-blue-700' },
+    };
+    return langMap[lang.toLowerCase()] || { name: lang.toUpperCase(), icon: <Code2 className="w-3 h-3" />, color: 'bg-gray-500' };
+  };
+
+  const langInfo = getLanguageInfo(language);
+
+  // Inline code styling - much improved
   if (inline) {
     return (
-      <code className="bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded text-sm font-mono">
+      <code className="relative inline-flex items-center bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-2 py-1 rounded-md text-sm font-mono border border-slate-200 dark:border-slate-700 shadow-sm">
         {children}
       </code>
     );
   }
 
-  // Block code styling
+  // Block code styling - simplified design
   return (
     <div className="relative group my-4">
-      {/* Language label - positioned absolutely over the code */}
-      <span className="absolute top-4 left-4 z-10 text-gray-400 text-xs font-medium uppercase tracking-wide opacity-60">
-        {language}
-      </span>
+      {/* Simple header with language and copy button */}
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-medium text-slate-400 uppercase tracking-wide">
+          {langInfo.name}
+        </span>
+        
+        {/* Copy button */}
+        <button
+          onClick={handleCopy}
+          className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-all duration-200 ${
+            copied 
+              ? 'bg-green-600/20 text-green-400 border border-green-500/30' 
+              : 'bg-slate-700/50 hover:bg-slate-600/50 text-slate-300 hover:text-white border border-slate-600/30'
+          }`}
+          title={copied ? 'Copied!' : 'Copy code'}
+        >
+          {copied ? (
+            <>
+              <Check className="w-3 h-3" />
+              <span>Copied</span>
+            </>
+          ) : (
+            <>
+              <Copy className="w-3 h-3" />
+              <span>Copy</span>
+            </>
+          )}
+        </button>
+      </div>
       
-      {/* Copy button - positioned absolutely over the code */}
-      <button
-        onClick={handleCopy}
-        className="absolute top-4 right-4 z-10 flex items-center justify-center w-8 h-8 bg-gray-700/80 hover:bg-gray-600/80 rounded transition-colors duration-200 opacity-0 group-hover:opacity-100"
-        title={copied ? 'Copied!' : 'Copy code'}
-      >
-        {copied ? (
-          <Check className="w-4 h-4 text-green-400" />
-        ) : (
-          <Copy className="w-4 h-4 text-gray-300" />
-        )}
-      </button>
-      
-      {/* Code content */}
+      {/* Code content - clean and simple */}
       <div className="rounded-lg overflow-hidden">
         <SyntaxHighlighter
           style={vscDarkPlus}
@@ -60,17 +95,15 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ children, className, inlin
           PreTag="div"
           customStyle={{
             margin: 0,
-            borderRadius: '8px',
             background: '#1e1e1e',
             fontSize: '14px',
-            lineHeight: '1.5',
-            padding: '32px 16px 16px 16px',
+            lineHeight: '1.6',
+            padding: '16px 20px',
+            borderRadius: '8px',
+            fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace',
           }}
-          codeTagProps={{
-            style: {
-              fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace',
-            }
-          }}
+          wrapLines={true}
+          wrapLongLines={true}
         >
           {children}
         </SyntaxHighlighter>
