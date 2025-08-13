@@ -15,3 +15,4 @@ pillow
 boto3
 bs4
 yt-dlp
+youtube_transcript_api

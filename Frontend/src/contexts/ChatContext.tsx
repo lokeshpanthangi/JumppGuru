@@ -439,158 +439,82 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
       const historicalChats: Chat[] = [];
 
-      // Process each chat entry directly from the history array
-      historyData.history.forEach((chatEntry: any, index: number) => {
-        // Handle the new response format: chatId, user, assistant structure
-        if (chatEntry.user && chatEntry.assistant) {
-          const messages: Message[] = [];
+      historyData.history.forEach((pageData: any) => {
+        if (pageData.chats && Array.isArray(pageData.chats) && pageData.chats.length > 0) {
+          const pageMessages: Message[] = [];
           
-          // Add user message
-          if (chatEntry.user.query) {
-            messages.push({
-              id: `${chatEntry.chatId || `history-${index}`}-user`,
-              content: chatEntry.user.query,
-              type: 'user',
-              timestamp: new Date(chatEntry.user.timestamp),
-              mode: 'research',
-              page: index + 1, // Use index as page number
-            });
-          }
-
-          // Process assistant response
-          if (chatEntry.assistant && chatEntry.assistant.content) {
-            let responseContent = '';
-            
-            // Handle content array format (blocks)
-            if (Array.isArray(chatEntry.assistant.content)) {
-              responseContent = `<BLOCKS_DATA>${JSON.stringify(chatEntry.assistant.content)}</BLOCKS_DATA>`;
-            } else if (typeof chatEntry.assistant.content === 'string') {
-              responseContent = chatEntry.assistant.content;
+          // Group all chats from this page into a single chat
+          pageData.chats.forEach((chatData: any) => {
+            // Add user message
+            if (chatData.query) {
+              pageMessages.push({
+                id: `${chatData._id}-user`,
+                content: chatData.query,
+                type: 'user',
+                timestamp: new Date(chatData.timestamp),
+                page: pageData.page,
+              });
             }
 
-            // Add YouTube links if present in user data
-            if (chatEntry.user.youtube_links && Array.isArray(chatEntry.user.youtube_links) && chatEntry.user.youtube_links.length > 0) {
-              const limitedVideos = chatEntry.user.youtube_links.slice(0, 3);
-              const remainingVideos = chatEntry.user.youtube_links.slice(3);
+            // Add AI response
+            if (chatData.response) {
+              let responseContent = '';
               
-              const youtubeContent = `\n\n<youtube-cards>${JSON.stringify({
-                videos: limitedVideos,
-                remainingVideos: remainingVideos
-              })}</youtube-cards>`;
-              responseContent += youtubeContent;
-            }
+              // Handle different response formats
+              if (typeof chatData.response === 'string') {
+                responseContent = chatData.response;
+              } else if (Array.isArray(chatData.response)) {
+                // Convert block-based response to fast rendering format
+                responseContent = `<BLOCKS_DATA>${JSON.stringify(chatData.response)}</BLOCKS_DATA>`;
+              }
 
-            messages.push({
-              id: `${chatEntry.chatId || `history-${index}`}-ai`,
-              content: responseContent,
-              type: 'ai',
-              timestamp: new Date(chatEntry.assistant.timestamp),
-              mode: 'research',
-              page: index + 1,
-            });
-          }
+              // Add YouTube links if present
+              if (chatData.youtube_links && Array.isArray(chatData.youtube_links) && chatData.youtube_links.length > 0) {
+                const limitedVideos = chatData.youtube_links.slice(0, 3);
+                const remainingVideos = chatData.youtube_links.slice(3);
+                
+                const youtubeContent = `\n\n<youtube-cards>${JSON.stringify({
+                  videos: limitedVideos,
+                  remainingVideos: remainingVideos
+                })}</youtube-cards>`;
+                responseContent += youtubeContent;
+              }
+
+              pageMessages.push({
+                id: `${chatData._id}-ai`,
+                content: responseContent,
+                type: 'ai',
+                timestamp: new Date(chatData.timestamp),
+                mode: chatData.LLM_model === 'gemini' ? 'research' : 'web',
+                page: pageData.page,
+              });
+            }
+          });
 
           // Sort messages by timestamp to maintain chronological order
-          messages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+          pageMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
-          if (messages.length > 0) {
-            // Create a chat title from the user query
-            const chatTitle = chatEntry.user.query 
-              ? chatEntry.user.query.slice(0, 50) + (chatEntry.user.query.length > 50 ? '...' : '')
-              : `Chat ${index + 1}`;
+          // Create a single chat for this entire page
+          const pageChat: Chat = {
+            id: `history-page-${pageData.page}`,
+            title: pageData.preview || `Page ${pageData.page}`,
+            messages: pageMessages,
+            createdAt: pageMessages.length > 0 ? pageMessages[0].timestamp : new Date(),
+            updatedAt: pageMessages.length > 0 ? pageMessages[pageMessages.length - 1].timestamp : new Date(),
+            backendChatId: null, // Page-level chat doesn't have individual chat_id
+            hasUsedResearchMode: pageData.chats.some((chat: any) => chat.LLM_model === 'gemini'),
+            page: pageData.page,
+          };
 
-            // Create a single chat for this conversation
-            const chat: Chat = {
-              id: `history-${chatEntry.chatId || index}`,
-              title: chatTitle,
-              messages: messages,
-              createdAt: messages[0].timestamp,
-              updatedAt: messages[messages.length - 1].timestamp,
-              backendChatId: chatEntry.chatId,
-              hasUsedResearchMode: true, // All these appear to be research mode chats
-              page: index + 1,
-            };
-
-            historicalChats.push(chat);
-          }
-        }
-        // Handle old format fallback (keeping for compatibility)
-        else if (chatEntry.query || chatEntry.response) {
-          const messages: Message[] = [];
-          
-          // Add user message (old format)
-          if (chatEntry.query) {
-            messages.push({
-              id: `${chatEntry._id || `history-${index}`}-user`,
-              content: chatEntry.query,
-              type: 'user',
-              timestamp: new Date(chatEntry.timestamp),
-              page: index + 1,
-            });
-          }
-
-          // Add AI response (old format)
-          if (chatEntry.response) {
-            let responseContent = '';
-            
-            // Handle different response formats
-            if (typeof chatEntry.response === 'string') {
-              responseContent = chatEntry.response;
-            } else if (Array.isArray(chatEntry.response)) {
-              responseContent = `<BLOCKS_DATA>${JSON.stringify(chatEntry.response)}</BLOCKS_DATA>`;
-            }
-
-            // Add YouTube links if present
-            if (chatEntry.youtube_links && Array.isArray(chatEntry.youtube_links) && chatEntry.youtube_links.length > 0) {
-              const limitedVideos = chatEntry.youtube_links.slice(0, 3);
-              const remainingVideos = chatEntry.youtube_links.slice(3);
-              
-              const youtubeContent = `\n\n<youtube-cards>${JSON.stringify({
-                videos: limitedVideos,
-                remainingVideos: remainingVideos
-              })}</youtube-cards>`;
-              responseContent += youtubeContent;
-            }
-
-            messages.push({
-              id: `${chatEntry._id || `history-${index}`}-ai`,
-              content: responseContent,
-              type: 'ai',
-              timestamp: new Date(chatEntry.timestamp),
-              mode: chatEntry.LLM_model === 'gemini' ? 'research' : 'web',
-              page: index + 1,
-            });
-          }
-
-          messages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-
-          if (messages.length > 0) {
-            const chatTitle = chatEntry.query 
-              ? chatEntry.query.slice(0, 50) + (chatEntry.query.length > 50 ? '...' : '')
-              : `Chat ${index + 1}`;
-
-            const chat: Chat = {
-              id: `history-old-${chatEntry._id || index}`,
-              title: chatTitle,
-              messages: messages,
-              createdAt: messages[0].timestamp,
-              updatedAt: messages[messages.length - 1].timestamp,
-              backendChatId: chatEntry._id,
-              hasUsedResearchMode: chatEntry.LLM_model === 'gemini',
-              page: index + 1,
-            };
-
-            historicalChats.push(chat);
-          }
+          historicalChats.push(pageChat);
         }
       });
 
-      // Sort chats by timestamp in descending order (latest first)
-      historicalChats.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      // Sort chats by page number in descending order (3, 2, 1)
+      historicalChats.sort((a, b) => b.page - a.page);
 
       if (historicalChats.length > 0) {
         console.log(`✅ Loaded ${historicalChats.length} historical chats for user ${userId}`);
-        console.log('🔍 Historical chats structure:', historicalChats);
         
         // Load historical chats
         dispatch({ type: 'LOAD_HISTORY', chats: historicalChats });
@@ -675,6 +599,24 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         // Set initial loading state
         dispatch({ type: 'SET_LOADING_STATE', loadingState: 'Processing your research query...' });
 
+        // Start both API calls immediately in parallel
+        const genaiPromise = fetch(`${BACKEND_URL}/genai/generate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            user_id: userId,
+            query: content.trim(),
+            lang: 'auto',
+            max_images: 3,
+            page: state.currentPage
+          })
+        }).then(res => {
+          if (!res.ok) throw new Error(`GenAI API failed: ${res.status}`);
+          return res.json();
+        });
+
         // Create AI message for streaming
         const aiMessage: Message = {
           id: aiMessageId,
@@ -699,6 +641,110 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           return res.json();
         });
 
+        // Wait for GenAI response first
+        const genaiResponse = await genaiPromise.catch(error => ({ error }));
+        console.log('🔍 Full GenAI Response:', genaiResponse);
+        
+        // Extract chat_id from GenAI response
+        let backendChatId = null;
+        if (genaiResponse && genaiResponse.chat_id) {
+          backendChatId = genaiResponse.chat_id;
+          console.log('✅ Backend chat_id extracted:', backendChatId);
+          // Store the backend chat_id in the current chat
+          dispatch({ type: 'SET_BACKEND_CHAT_ID', chatId, backendChatId });
+        } else {
+          console.log('❌ No chat_id found in GenAI response');
+          console.log('GenAI response keys:', Object.keys(genaiResponse || {}));
+        }
+        
+        // Process and display GenAI content immediately using fast block rendering
+        let genaiContent = '';
+        if (genaiResponse.error) {
+          console.error('GenAI API Error:', genaiResponse.error);
+          genaiContent = '⚠️ Tutorial content temporarily unavailable.';
+        } else if (genaiResponse.blocks && Array.isArray(genaiResponse.blocks)) {
+          // Store blocks as JSON for fast rendering instead of converting to markdown
+          genaiContent = `<BLOCKS_DATA>${JSON.stringify(genaiResponse.blocks)}</BLOCKS_DATA>`;
+        }
+
+        // Add GenAI message first - no streaming for research mode
+        const genaiMessage: Message = {
+          id: aiMessageId,
+          content: genaiContent,
+          type: 'ai',
+          timestamp: new Date(),
+          mode: 'research',
+          isStreaming: false,
+          isCurrentlyGenerating: false,
+          page: state.currentPage,
+        };
+        dispatch({ type: 'ADD_MESSAGE', chatId, message: genaiMessage });
+
+        // Wait for YouTube response and update the existing message
+        const youtubeResponse = await youtubePromise.catch(error => ({ error }));
+        console.log('🎥 Full YouTube Response:', youtubeResponse);
+        
+        // Call YouTube update API if we have both chat_id and YouTube videos
+        console.log('🔄 Checking conditions for update API call:');
+        console.log('- backendChatId:', backendChatId);
+        console.log('- youtubeResponse.videos exists:', !!youtubeResponse.videos);
+        console.log('- youtubeResponse.videos is array:', Array.isArray(youtubeResponse.videos));
+        
+        console.log('Calling YouTube update API1...',backendChatId,youtubeResponse);
+        if (backendChatId && youtubeResponse.videos && Array.isArray(youtubeResponse.videos)) {
+          console.log('Calling YouTube update API2...');
+          try {
+            const updateResponse = await fetch(`${BACKEND_URL}/youtube/update_youtube_links`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                user_id: userId,
+                page: state.currentPage,
+                chat_id: backendChatId,
+                videos: youtubeResponse.videos
+              })
+            });
+            
+            console.log('📡 Update API Response Status:', updateResponse.status);
+            const responseData = await updateResponse.json();
+            console.log('📡 Update API Response Data:', responseData);
+            
+            if (updateResponse.ok) {
+              console.log('✅ YouTube links successfully stored in database');
+            } else {
+              console.error('❌ Failed to update YouTube links:', updateResponse.status);
+            }
+          } catch (error) {
+            console.error('💥 Error calling YouTube update API:', error);
+          }
+        } else {
+          console.log('⚠️ Skipping update API call - conditions not met');
+        }
+        
+        let youtubeContent = '';
+        if (youtubeResponse.error) {
+          console.error('YouTube API Error:', youtubeResponse.error);
+          youtubeContent = '\n\n## Related Videos\n\n⚠️ Video recommendations temporarily unavailable.';
+        } else if (youtubeResponse.videos && Array.isArray(youtubeResponse.videos)) {
+          // Show only first 3 videos by default
+          const limitedVideos = youtubeResponse.videos.slice(0, 3);
+          const remainingVideos = youtubeResponse.videos.slice(3);
+          
+          youtubeContent = `\n\n<youtube-cards>${JSON.stringify({
+            videos: limitedVideos,
+            remainingVideos: remainingVideos
+          })}</youtube-cards>`;
+        }
+
+        // Update the existing message with YouTube content (no duplicate message)
+        dispatch({ 
+          type: 'UPDATE_MESSAGE', 
+          chatId, 
+          messageId: aiMessageId,
+          content: genaiContent + youtubeContent
+        });
         // Handle SSE streaming for GenAI
         try {
           const response = await fetch(`${BACKEND_URL}/genai/generate`, {

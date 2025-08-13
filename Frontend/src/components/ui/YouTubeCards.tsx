@@ -14,9 +14,11 @@ interface YouTubeVideo {
 interface YouTubeCardsProps {
   videos: YouTubeVideo[];
   remainingVideos?: YouTubeVideo[];
+  playgroundMode?: boolean;
+  onVideoSelectForPlayground?: (video: YouTubeVideo) => void;
 }
 
-export const YouTubeCards: React.FC<YouTubeCardsProps> = ({ videos, remainingVideos = [] }) => {
+export const YouTubeCards: React.FC<YouTubeCardsProps> = ({ videos, remainingVideos = [], playgroundMode = false, onVideoSelectForPlayground }) => {
   const [showMore, setShowMore] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<YouTubeVideo | null>(null);
@@ -30,8 +32,14 @@ export const YouTubeCards: React.FC<YouTubeCardsProps> = ({ videos, remainingVid
   }
 
   const handleVideoClick = (video: YouTubeVideo) => {
-    setSelectedVideo(video);
-    setModalOpen(true);
+    if (playgroundMode && onVideoSelectForPlayground) {
+      // In playground mode, select video for playground
+      onVideoSelectForPlayground(video);
+    } else {
+      // Normal mode - open video modal
+      setSelectedVideo(video);
+      setModalOpen(true);
+    }
   };
 
   const closeModal = () => {
