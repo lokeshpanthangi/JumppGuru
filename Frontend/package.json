@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@elevenlabs/elevenlabs-js": "^2.9.0",
     "@livekit/agents": "^0.7.9",
     "@livekit/components-react": "^2.9.14",
     "@lottiefiles/dotlottie-react": "^0.14.4",

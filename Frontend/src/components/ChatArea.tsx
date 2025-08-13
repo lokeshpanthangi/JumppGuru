@@ -9,9 +9,11 @@ import { MarkdownRenderer } from './ui/MarkdownRenderer';
 import { FastBlockRenderer } from './ui/FastBlockRenderer';
 import { StreamingMessage } from './ui/StreamingMessage';
 import { PlainTextRenderer } from './ui/PlainTextRenderer';
+import { TTSHighlightRenderer } from './ui/TTSHighlightRenderer';
 import { QuizModal } from './ui/QuizModal';
 import { QuizDisplayModal } from './ui/QuizDisplayModal';
 import { Renderer, Program, Mesh, Color, Triangle } from 'ogl';
+// ElevenLabs TTS will use direct API calls
 
 const VERT = `#version 300 es
 in vec2 position;
@@ -288,6 +290,7 @@ export const ChatArea: React.FC = () => {
   const [isQuizModalOpen, setIsQuizModalOpen] = useState(false);
   const [isQuizDisplayOpen, setIsQuizDisplayOpen] = useState(false);
   const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
+  // Auto-TTS is always enabled for non-research messages
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<ChatInputRef>(null);
@@ -296,6 +299,10 @@ export const ChatArea: React.FC = () => {
   const [ttsAudioCache, setTtsAudioCache] = useState<Map<string, Blob[]>>(new Map());
   const [isLoadingTTS, setIsLoadingTTS] = useState<Map<string, boolean>>(new Map());
   const audioRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const lastProcessedMessageRef = useRef<string | null>(null);
+  const [currentAudioElement, setCurrentAudioElement] = useState<HTMLAudioElement | null>(null);
+  const [currentPlayingMessageId, setCurrentPlayingMessageId] = useState<string | null>(null);
+  const [wordTimestamps, setWordTimestamps] = useState<Array<{word: string, start: number, end: number}> | null>(null);
 
   const hasMessages = state.currentChat?.messages.length ?? 0 > 0;
 
@@ -349,6 +356,9 @@ export const ChatArea: React.FC = () => {
 
   // Cleanup audio when component unmounts or chat changes
   useEffect(() => {
+    // Reset last processed message when chat changes
+    lastProcessedMessageRef.current = null;
+    
     return () => {
       // Stop all audio playback
       audioRefs.current.forEach((audio) => {
@@ -377,6 +387,11 @@ export const ChatArea: React.FC = () => {
       speechSynthesis.cancel();
     };
   }, []);
+
+  // Reset last processed message when chat changes
+  useEffect(() => {
+    lastProcessedMessageRef.current = null;
+  }, [state.currentChatId]);
 
   const handleMessageSent = () => {
     if (showCenteredInput) {
@@ -456,8 +471,16 @@ export const ChatArea: React.FC = () => {
         }
       } else {
         speechSynthesis.cancel();
+        // Stop current audio element if it exists
+        if (currentAudioElement) {
+          currentAudioElement.pause();
+          currentAudioElement.currentTime = 0;
+        }
       }
       setPlayingVoice(null);
+      setCurrentAudioElement(null);
+      setCurrentPlayingMessageId(null);
+      setWordTimestamps(null);
       return;
     }
 
@@ -469,8 +492,17 @@ export const ChatArea: React.FC = () => {
         currentAudio.currentTime = 0;
       }
       speechSynthesis.cancel();
+      // Stop current audio element if it exists
+      if (currentAudioElement) {
+        currentAudioElement.pause();
+        currentAudioElement.currentTime = 0;
+      }
     }
 
+    // Clear previous states
+    setCurrentAudioElement(null);
+    setCurrentPlayingMessageId(null);
+    setWordTimestamps(null);
     setPlayingVoice(messageId);
 
     if (isResearchModeMessage && chatId) {
@@ -479,13 +511,104 @@ export const ChatArea: React.FC = () => {
       setTimeout(() => setNotification(null), 3000);
       await handleTTSStreaming(chatId, messageId);
     } else {
-      // Use existing speech synthesis for non-research mode messages
-      if ('speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(content);
-        utterance.onend = () => setPlayingVoice(null);
-        utterance.onerror = () => setPlayingVoice(null);
-        speechSynthesis.speak(utterance);
+      // Use ElevenLabs TTS for non-research mode messages
+      await handleElevenLabsTTS(content, messageId);
+    }
+  };
+
+  const processCharacterTimestamps = (alignment: any, text: string) => {
+    // Convert character-level timestamps to word-level for compatibility
+    const words = text.split(/\s+/);
+    const wordTimestamps = [];
+    let charIndex = 0;
+    
+    for (const word of words) {
+      const wordStart = charIndex;
+      const wordEnd = charIndex + word.length - 1;
+      
+      // Get start and end times from character arrays
+      const startTime = alignment.character_start_times_seconds[wordStart] || 0;
+      const endTime = alignment.character_end_times_seconds[wordEnd] || startTime + 0.5;
+      
+      wordTimestamps.push({
+        word: word,
+        start: startTime,
+        end: endTime
+      });
+      
+      charIndex += word.length + 1; // +1 for space
+    }
+    
+    return wordTimestamps;
+  };
+
+  const handleElevenLabsTTS = async (content: string, messageId: string) => {
+    const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY;
+    
+    try {
+      // Call ElevenLabs API with character timestamps
+      const ttsResponse = await fetch('https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM/with-timestamps', {
+        method: 'POST',
+        headers: {
+          'xi-api-key': apiKey,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          text: content,
+          model_id: 'eleven_multilingual_v2',
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.75,
+            style: 0.0,
+            use_speaker_boost: true,
+            speed: 0.8
+          }
+        })
+      });
+
+      if (!ttsResponse.ok) {
+        throw new Error(`ElevenLabs API error: ${ttsResponse.status}`);
       }
+
+      const result = await ttsResponse.json();
+      
+      // Convert base64 audio to blob
+      const audioData = atob(result.audio_base64);
+      const audioArray = new Uint8Array(audioData.length);
+      for (let i = 0; i < audioData.length; i++) {
+        audioArray[i] = audioData.charCodeAt(i);
+      }
+      const audioBlob = new Blob([audioArray], { type: 'audio/mpeg' });
+      const audioUrl = URL.createObjectURL(audioBlob);
+      
+      // Process character-level timestamps into word-level for compatibility
+      const processedTimestamps = processCharacterTimestamps(result.alignment, content);
+      
+      // Store timestamps for highlighting
+      setWordTimestamps(processedTimestamps);
+      
+      // Create and setup audio element
+      const audio = new Audio(audioUrl);
+      
+      // Store audio element reference for highlighting
+      setCurrentAudioElement(audio);
+      setCurrentPlayingMessageId(messageId);
+      
+      audio.onended = () => {
+        setPlayingVoice(null);
+        setCurrentAudioElement(null);
+        setCurrentPlayingMessageId(null);
+        setWordTimestamps(null);
+        URL.revokeObjectURL(audioUrl);
+      };
+      
+      audio.play();
+    } catch (error) {
+      console.error('ElevenLabs TTS error:', error);
+      setPlayingVoice(null);
+      setCurrentAudioElement(null);
+      setCurrentPlayingMessageId(null);
+      setWordTimestamps(null);
     }
   };
 
@@ -872,6 +995,13 @@ export const ChatArea: React.FC = () => {
                           )
                         ) : message.content.includes('<BLOCKS_DATA>') ? (
                           <FastBlockRenderer content={message.content} />
+                        ) : currentPlayingMessageId === message.id ? (
+                          <TTSHighlightRenderer 
+                            content={message.content} 
+                            isPlaying={playingVoice === message.id}
+                            audioElement={currentAudioElement}
+                            wordTimestamps={wordTimestamps}
+                          />
                         ) : (
                           <MarkdownRenderer content={message.content} />
                         )}
@@ -992,6 +1122,8 @@ export const ChatArea: React.FC = () => {
             
             <div ref={messagesEndRef} />
           </div>
+
+
 
 
 
