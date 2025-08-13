@@ -1,77 +1,27 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks
-from pydantic import BaseModel, HttpUrl
-import google.generativeai as genai
-import json
+from fastapi import APIRouter, HTTPException
+import httpx
+from pydantic import BaseModel
 import os
-import tempfile
-import yt_dlp
-from typing import Optional
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
+import json
 import re
+import google.generativeai as genai
+from typing import Optional
 
-router = APIRouter(
-    prefix="/api/youtube-learning",
-    tags=["YouTube Learning"]
-)
+router = APIRouter(prefix="/api/youtube-learning", tags=["YouTube Learning"])
 
-# Configure Gemini AI
+# Configure Gemini API
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-if not GEMINI_API_KEY:
-    raise ValueError("GEMINI_API_KEY environment variable is required")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
 
-genai.configure(api_key=GEMINI_API_KEY)
+class YouTubeLearningRequest(BaseModel):
+    url: str
 
-class YouTubeRequest(BaseModel):
-    url: HttpUrl
-    
-class LearningAppResponse(BaseModel):
+class YouTubeLearningResponse(BaseModel):
     html_content: str
-    video_title: str
-    success: bool
-    message: str
 
-# Thread pool for CPU-bound tasks
-executor = ThreadPoolExecutor(max_workers=2)
-
-def download_video_info(url: str):
-    """Download video information and audio for processing"""
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'extractaudio': True,
-        'audioformat': 'mp3',
-        'outtmpl': '%(title)s.%(ext)s',
-        'quiet': True,
-        'no_warnings': True,
-    }
-    
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        try:
-            # Extract video info
-            info = ydl.extract_info(url, download=False)
-            title = info.get('title', 'Unknown Video')
-            
-            # Create temporary file for audio
-            temp_dir = tempfile.mkdtemp()
-            audio_path = os.path.join(temp_dir, f"{title[:50]}.mp3")
-            
-            # Download audio
-            ydl_opts['outtmpl'] = audio_path
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl_download:
-                ydl_download.download([url])
-            
-            return {
-                'title': title,
-                'audio_path': audio_path,
-                'duration': info.get('duration', 0)
-            }
-        except Exception as e:
-            raise Exception(f"Failed to download video: {str(e)}")
-
-def generate_spec_from_video(video_path: str, video_title: str) -> str:
-    """Generate app specification using Gemini 2.5 Flash"""
-    
-    prompt = """You are a pedagogist and product designer with deep expertise in crafting engaging learning experiences via interactive web apps.
+# Constants from the original codebase
+SPEC_FROM_VIDEO_PROMPT = """You are a pedagogist and product designer with deep expertise in crafting engaging learning experiences via interactive web apps.
 
 Examine the contents of the attached video. Then, write a detailed and carefully considered spec for an interactive web app designed to complement the video and reinforce its key idea or ideas. The recipient of the spec does not have access to the video, so the spec must be thorough and self-contained (the spec must not mention that it is based on a video). Here is an example of a spec written in response to a video about functional harmony:
 
@@ -90,265 +40,246 @@ The goal of the app that is to be built based on the spec is to enhance understa
 
 Provide the result as a JSON object containing a single field called "spec", whose value is the spec for the web app."""
 
+CODE_REGION_OPENER = '```'
+CODE_REGION_CLOSER = '```'
+
+SPEC_ADDENDUM = f'\n\nThe app must be fully responsive and function properly on both desktop and mobile. Provide the code as a single, self-contained HTML document. All styles and scripts must be inline. In the result, encase the code between "{CODE_REGION_OPENER}" and "{CODE_REGION_CLOSER}" for easy parsing.'
+
+def get_youtube_video_id(url: str) -> Optional[str]:
+    """Extract YouTube video ID from URL"""
     try:
-        # Initialize Gemini 2.5 Flash model with safety settings
-        safety_settings = [
-            {
-                "category": "HARM_CATEGORY_HARASSMENT",
-                "threshold": "BLOCK_NONE"
-            },
-            {
-                "category": "HARM_CATEGORY_HATE_SPEECH", 
-                "threshold": "BLOCK_NONE"
-            },
-            {
-                "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                "threshold": "BLOCK_NONE"
-            },
-            {
-                "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-                "threshold": "BLOCK_NONE"
-            }
-        ]
+        # Handle standard watch URLs (youtube.com/watch?v=...)
+        if 'youtube.com/watch' in url:
+            match = re.search(r'v=([^&]+)', url)
+            if match and len(match.group(1)) == 11:
+                return match.group(1)
         
-        generation_config = {
-            "temperature": 0.7,
-            "top_p": 0.8,
-            "top_k": 40,
-            "max_output_tokens": 100000,
+        # Handle short URLs (youtu.be/...)
+        if 'youtu.be/' in url:
+            match = re.search(r'youtu\.be/([^?]+)', url)
+            if match and len(match.group(1)) == 11:
+                return match.group(1)
+        
+        # Handle embed URLs (youtube.com/embed/...)
+        if 'youtube.com/embed/' in url:
+            match = re.search(r'embed/([^?]+)', url)
+            if match and len(match.group(1)) == 11:
+                return match.group(1)
+        
+        # Fallback regex
+        reg_exp = r'^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*)'
+        match = re.search(reg_exp, url)
+        if match and len(match.group(2)) == 11:
+            return match.group(2)
+            
+    except Exception as e:
+        print(f"Error extracting video ID: {e}")
+    
+    return None
+
+def validate_youtube_url(url: str) -> dict:
+    """Validate YouTube URL"""
+    video_id = get_youtube_video_id(url)
+    if video_id:
+        return {"isValid": True}
+    return {"isValid": False, "error": "Invalid YouTube URL"}
+
+def parse_json_response(response_text: str) -> dict:
+    """Parse JSON from response text"""
+    try:
+        start = response_text.find('{')
+        end = response_text.rfind('}') + 1
+        if start != -1 and end > start:
+            json_str = response_text[start:end]
+            return json.loads(json_str)
+    except Exception as e:
+        print(f"Error parsing JSON: {e}")
+    return {}
+
+def parse_html_content(response_text: str, opener: str, closer: str) -> str:
+    """Extract HTML content from response"""
+    try:
+        start = response_text.find('<!DOCTYPE html>')
+        end = response_text.rfind(closer)
+        if start != -1 and end > start:
+            return response_text[start:end]
+    except Exception as e:
+        print(f"Error parsing HTML: {e}")
+    return ""
+
+import requests
+import json
+
+async def generate_spec_from_video(video_url: str) -> str:
+    """Generate learning app specification from video"""
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=500, detail="Gemini API key not configured")
+    
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+        
+        headers = {
+            'accept': '*/*',
+            'accept-language': 'en-GB,en-US;q=0.9,en;q=0.8',
+            'content-type': 'application/json',
+            'x-goog-api-key': GEMINI_API_KEY
         }
         
-        model = genai.GenerativeModel(
-            'gemini-2.5-flash',
-            safety_settings=safety_settings,
-            generation_config=generation_config
-        )
-        
-        # Upload the video file
-        video_file = genai.upload_file(video_path)
-        
-        # Generate response
-        response = model.generate_content([prompt, video_file])
-        
-        # Check if response was blocked
-        if response.candidates and response.candidates[0].finish_reason != 1:  # 1 = STOP (successful)
-            finish_reason = response.candidates[0].finish_reason if response.candidates else "Unknown"
-            genai.delete_file(video_file.name)
-            raise Exception(f"Response was blocked. Finish reason: {finish_reason}")
-        
-        # Check if response has valid parts
-        if not response.parts:
-            genai.delete_file(video_file.name)
-            raise Exception("No response parts generated")
-            
-        # Clean up uploaded file
-        genai.delete_file(video_file.name)
-        
-        # Get response text safely
-        try:
-            response_text = response.text.strip()
-        except:
-            # Fallback to extracting text from parts
-            response_text = ""
-            for part in response.parts:
-                if hasattr(part, 'text'):
-                    response_text += part.text
-            
-            if not response_text:
-                raise Exception("Unable to extract text from response")
-        
-        # Extract JSON from response if wrapped in code blocks
-        json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response_text, re.DOTALL)
-        if json_match:
-            response_text = json_match.group(1)
-        
-        # Try to parse as JSON
-        try:
-            spec_data = json.loads(response_text)
-            return spec_data.get('spec', response_text)
-        except json.JSONDecodeError:
-            # If not valid JSON, return the text as is
-            return response_text
-        
-    except Exception as e:
-        raise Exception(f"Failed to generate spec: {str(e)}")
-
-def generate_app_code(spec: str) -> str:
-    """Generate HTML app code using Gemini 2.5 Pro"""
-    
-    full_prompt = f"""{spec}
-
-The app must be fully responsive and function properly on both desktop and mobile. Provide the code as a single, self-contained HTML document. All styles and scripts must be inline. In the result, encase the code between "```" and "```" for easy parsing."""
-
-    try:
-        # Initialize Gemini 2.5 Pro model with safety settings
-        safety_settings = [
-            {
-                "category": "HARM_CATEGORY_HARASSMENT",
-                "threshold": "BLOCK_NONE"
-            },
-            {
-                "category": "HARM_CATEGORY_HATE_SPEECH", 
-                "threshold": "BLOCK_NONE"
-            },
-            {
-                "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                "threshold": "BLOCK_NONE"
-            },
-            {
-                "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-                "threshold": "BLOCK_NONE"
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {
+                            "text": SPEC_FROM_VIDEO_PROMPT
+                        },
+                        {
+                            "fileData": {
+                                "fileUri": video_url,
+                                "mimeType": "video/mp4"
+                            }
+                        }
+                    ],
+                    "role": "user"
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.75
             }
-        ]
-        
-        generation_config = {
-            "temperature": 0.3,
-            "top_p": 0.8,
-            "top_k": 40,
-            "max_output_tokens": 81920,
         }
         
-        model = genai.GenerativeModel(
-            'gemini-2.5-pro',
-            safety_settings=safety_settings,
-            generation_config=generation_config
-        )
+        response = requests.post(url, headers=headers, json=payload)
+        response.raise_for_status()
         
-        # Generate response
-        response = model.generate_content(full_prompt)
+        result = response.json()
         
-        # Check if response was blocked
-        if response.candidates and response.candidates[0].finish_reason != 1:  # 1 = STOP (successful)
-            finish_reason = response.candidates[0].finish_reason if response.candidates else "Unknown"
-            raise Exception(f"Response was blocked. Finish reason: {finish_reason}")
         
-        # Check if response has valid parts
-        if not response.parts:
-            raise Exception("No response parts generated")
+        # Extract the generated text from the response
+        generated_text = result['candidates'][0]['content']['parts'][0]['text']
         
-        # Get response text safely
-        try:
-            response_text = response.text.strip()
-        except:
-            # Fallback to extracting text from parts
-            response_text = ""
-            for part in response.parts:
-                if hasattr(part, 'text'):
-                    response_text += part.text
-            
-            if not response_text:
-                raise Exception("Unable to extract text from response")
+        # Parse the JSON response
+        print(generated_text,"=======================================================")
+        parsed_response = parse_json_response(generated_text)
+        spec = parsed_response.get('spec', '')
         
-        # Extract HTML code from response
-        html_match = re.search(r'```(?:html)?\s*(.*?)\s*```', response_text, re.DOTALL)
-        if html_match:
-            return html_match.group(1).strip()
+        if not spec:
+            # Fallback: try to extract spec from response text directly
+            spec = generated_text
         
-        # If no code blocks found, return the whole response
-        return response_text
+        # Add the addendum
+        spec += SPEC_ADDENDUM
+        
+        return spec
         
     except Exception as e:
-        raise Exception(f"Failed to generate app code: {str(e)}")
+        print(f"Error generating spec: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate spec: {str(e)}")
 
-async def process_youtube_video(url: str) -> LearningAppResponse:
-    """Main processing function"""
-    temp_files = []
+
+
+async def generate_code_from_spec(spec: str) -> str:
+    """Generate HTML code from specification"""
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=500, detail="Gemini API key not configured")
     
     try:
-        # Step 1: Download video info and audio
-        loop = asyncio.get_event_loop()
-        video_info = await loop.run_in_executor(executor, download_video_info, url)
-        temp_files.append(video_info['audio_path'])
+        # Prepare the request data matching the curl structure
+        headers = {
+            'accept': '*/*',
+            'accept-language': 'en-GB,en-US;q=0.9,en;q=0.8',
+            'content-type': 'application/json',
+            'x-goog-api-client': 'google-genai-sdk/1.13.0 gl-node/web',
+            'x-goog-api-key': GEMINI_API_KEY
+        }
         
-        # Step 2: Generate spec using Gemini 2.5 Flash
-        spec = await loop.run_in_executor(
-            executor, 
-            generate_spec_from_video, 
-            video_info['audio_path'], 
-            video_info['title']
-        )
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {
+                            "text": spec
+                        }
+                    ],
+                    "role": "user"
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.75
+            }
+        }
+
+        print(payload,"=======================================================")
         
-        # Step 3: Generate HTML app using Gemini 2.5 Pro
-        html_content = await loop.run_in_executor(executor, generate_app_code, spec)
+        url="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent"
+        # Make the HTTP request
+        response = requests.post(url, headers=headers, json=payload)
+        response.raise_for_status()
         
-        return LearningAppResponse(
-            html_content=html_content,
-            video_title=video_info['title'],
-            success=True,
-            message="Learning app generated successfully"
-        )
+        response_data = response.json()
+        
+        print(response_data,"================================response data=======================")
+
+        # Extract the generated text from response
+        generated_text = response_data['candidates'][0]['content']['parts'][0]['text']
+        
+        print(generated_text,"===============================generated text========================")
+        # Extract HTML content
+        code = parse_html_content(generated_text, CODE_REGION_OPENER, CODE_REGION_CLOSER)
+        
+        print(code,"===============================code========================")
+        if not code:
+            # Fallback: look for DOCTYPE html in the response
+
+            print("im inside the if")
+            if '<!DOCTYPE html>' in generated_text:
+                start = generated_text.find('<!DOCTYPE html>')
+                code = generated_text[start:]
+                # Clean up any trailing text after </html>
+                html_end = code.rfind('</html>')
+                if html_end != -1:
+                    code = code[:html_end + 7]  # Include </html>
+        
+        return code
         
     except Exception as e:
-        return LearningAppResponse(
-            html_content="",
-            video_title="",
-            success=False,
-            message=f"Error processing video: {str(e)}"
-        )
-    finally:
-        # Cleanup temporary files
-        for temp_file in temp_files:
-            try:
-                if os.path.exists(temp_file):
-                    os.remove(temp_file)
-                    # Also remove the directory if empty
-                    temp_dir = os.path.dirname(temp_file)
-                    if os.path.exists(temp_dir) and not os.listdir(temp_dir):
-                        os.rmdir(temp_dir)
-            except:
-                pass
+        print(f"Error generating code: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate code: {str(e)}")
 
-@router.post("/generate", response_model=LearningAppResponse)
-async def generate_learning_app(request: YouTubeRequest):
-    """
-    Generate an interactive learning app from a YouTube video URL
-    
-    - **url**: YouTube video URL to process
-    - Returns: HTML content for the interactive learning app
-    """
-    
-    try:
-        url_str = str(request.url)
         
+@router.post("/generate", response_model=YouTubeLearningResponse)
+async def generate_youtube_learning_app(request: YouTubeLearningRequest):
+    """
+    Generate an interactive learning app from a YouTube video URL.
+    
+    This endpoint:
+    1. Validates the YouTube URL
+    2. Uses Gemini AI to analyze the video content
+    3. Generates a learning app specification
+    4. Creates HTML code for an interactive learning app
+    5. Returns the complete HTML content
+    """
+    try:
         # Validate YouTube URL
-        if not any(domain in url_str.lower() for domain in ['youtube.com', 'youtu.be']):
-            raise HTTPException(status_code=400, detail="Please provide a valid YouTube URL")
+        validation_result = validate_youtube_url(request.url)
+        if not validation_result["isValid"]:
+            raise HTTPException(
+                status_code=400, 
+                detail=validation_result.get("error", "Invalid YouTube URL")
+            )
         
-        # Process the video
-        result = await process_youtube_video(url_str)
+        # Generate specification from video
+        spec = await generate_spec_from_video(request.url)
+        if not spec:
+            raise HTTPException(status_code=500, detail="Failed to generate learning app specification")
         
-        if not result.success:
-            raise HTTPException(status_code=500, detail=result.message)
+        # Generate HTML code from specification  
+        html_content = await generate_code_from_spec(spec)
+        if not html_content:
+            raise HTTPException(status_code=500, detail="Failed to generate HTML code")
         
-        return result
+        return YouTubeLearningResponse(html_content=html_content)
         
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-
-@router.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    return {
-        "status": "healthy",
-        "service": "YouTube Learning App Generator",
-        "models": {
-            "spec_generator": "gemini-2.5-flash",
-            "code_generator": "gemini-2.5-pro"
-        }
-    }
-
-# Additional endpoint to get just the HTML content as plain text
-@router.post("/generate/html")
-async def generate_learning_app_html(request: YouTubeRequest):
-    """
-    Generate an interactive learning app from YouTube video and return HTML as plain text
-    """
-    result = await generate_learning_app(request)
-    
-    return {
-        "html": result.html_content,
-        "title": result.video_title,
-        "success": result.success
-    }   
+        print(f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred")

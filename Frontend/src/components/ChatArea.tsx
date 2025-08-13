@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Search, Globe, Copy, ThumbsUp, ThumbsDown, Volume2, VolumeX, Brain } from 'lucide-react';
+import { Search, Globe, Copy, ThumbsUp, ThumbsDown, Volume2, VolumeX, Brain, Play, X } from 'lucide-react';
 import { useChatContext } from '../contexts/ChatContext';
 import { ChatInput, type ChatInputRef } from './ChatInput';
 import { TypingAnimation } from './ui/typing-animation';
@@ -288,6 +288,11 @@ export const ChatArea: React.FC = () => {
   const [isQuizModalOpen, setIsQuizModalOpen] = useState(false);
   const [isQuizDisplayOpen, setIsQuizDisplayOpen] = useState(false);
   const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
+  
+  // Playground state
+  const [playgroundMode, setPlaygroundMode] = useState(false);
+  const [playgroundUrl, setPlaygroundUrl] = useState('');
+  const [selectedVideoForPlayground, setSelectedVideoForPlayground] = useState<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<ChatInputRef>(null);
@@ -756,6 +761,60 @@ export const ChatArea: React.FC = () => {
     }
   };
 
+  // Playground functions
+  const extractVideoId = (url: string): string | null => {
+    const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+    const match = url.match(regex);
+    return match ? match[1] : null;
+  };
+
+  const handleTogglePlaygroundMode = () => {
+    setPlaygroundMode(!playgroundMode);
+    if (playgroundMode) {
+      // Reset playground state when turning off
+      setPlaygroundUrl('');
+      setSelectedVideoForPlayground(null);
+    }
+  };
+
+  const handlePlaygroundUrlChange = (url: string) => {
+    setPlaygroundUrl(url);
+    setSelectedVideoForPlayground(null); // Clear selection when typing manually
+  };
+
+  const handleVideoSelectForPlayground = (video: any) => {
+    setSelectedVideoForPlayground(video);
+    setPlaygroundUrl(video.link || '');
+  };
+
+  const handleGeneratePlayground = () => {
+    const urlToUse = playgroundUrl.trim();
+    if (!urlToUse) {
+      setNotification('Please enter a YouTube URL');
+      setTimeout(() => setNotification(null), 3000);
+      return;
+    }
+
+    const videoId = extractVideoId(urlToUse);
+    if (!videoId) {
+      setNotification('Invalid YouTube URL');
+      setTimeout(() => setNotification(null), 3000);
+      return;
+    }
+
+    // Open playground in new tab
+    const playgroundPath = `/playground/${videoId}?url=${encodeURIComponent(urlToUse)}`;
+    window.open(playgroundPath, '_blank');
+    
+    // Reset playground state
+    setPlaygroundMode(false);
+    setPlaygroundUrl('');
+    setSelectedVideoForPlayground(null);
+    
+    setNotification('Opening playground in new tab...');
+    setTimeout(() => setNotification(null), 3000);
+  };
+
 
 
   return (
@@ -854,7 +913,11 @@ export const ChatArea: React.FC = () => {
                       <div className="prose max-w-none">
                         {message.type === 'ai' && message.isCurrentlyGenerating ? (
                           message.mode === 'research' ? (
-                            <FastBlockRenderer content={message.content} />
+                            <FastBlockRenderer 
+                              content={message.content}
+                              playgroundMode={playgroundMode}
+                              onVideoSelectForPlayground={handleVideoSelectForPlayground}
+                            />
                           ) : (
                             <StreamingMessage 
                               content={message.content}
@@ -871,11 +934,87 @@ export const ChatArea: React.FC = () => {
                             </StreamingMessage>
                           )
                         ) : message.content.includes('<BLOCKS_DATA>') ? (
-                          <FastBlockRenderer content={message.content} />
+                          <FastBlockRenderer 
+                            content={message.content}
+                            playgroundMode={playgroundMode}
+                            onVideoSelectForPlayground={handleVideoSelectForPlayground}
+                          />
                         ) : (
                           <MarkdownRenderer content={message.content} />
                         )}
                       </div>
+                      
+                      {/* Playground Input - Show when playground mode is active and message has YouTube videos */}
+                      {playgroundMode && message.content.includes('<youtube-cards>') && message.type === 'ai' && message.mode === 'research' && (
+                        <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Play className="w-5 h-5 text-blue-600" />
+                            <h3 className="text-lg font-semibold text-blue-800 dark:text-blue-200">Generate Learning Playground</h3>
+                          </div>
+                          <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
+                            Enter a YouTube URL or click on one of the videos above to create an interactive learning experience.
+                          </p>
+                          
+                          <div className="space-y-3">
+                            {/* URL Input */}
+                            <div>
+                              <input
+                                type="text"
+                                value={playgroundUrl}
+                                onChange={(e) => handlePlaygroundUrlChange(e.target.value)}
+                                placeholder="Paste YouTube URL here..."
+                                className="w-full px-3 py-2 border border-input-border rounded-lg bg-background text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              />
+                            </div>
+                            
+                            {/* Selected Video Display */}
+                            {selectedVideoForPlayground && (
+                              <div className="flex items-center gap-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                <img 
+                                  src={selectedVideoForPlayground.thumbnail} 
+                                  alt={selectedVideoForPlayground.title}
+                                  className="w-16 h-12 object-cover rounded"
+                                />
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium text-text-primary truncate">
+                                    {selectedVideoForPlayground.title}
+                                  </p>
+                                  <p className="text-xs text-text-muted">Selected video</p>
+                                </div>
+                                <button
+                                  onClick={() => setSelectedVideoForPlayground(null)}
+                                  className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                                >
+                                  <X className="w-4 h-4 text-text-muted" />
+                                </button>
+                              </div>
+                            )}
+                            
+                            {/* Action Buttons */}
+                            <div className="flex items-center gap-3">
+                              <button
+                                onClick={handleGeneratePlayground}
+                                disabled={!playgroundUrl.trim()}
+                                className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 ${
+                                  !playgroundUrl.trim()
+                                    ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 cursor-not-allowed'
+                                    : 'bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg'
+                                }`}
+                              >
+                                <Play className="w-4 h-4" />
+                                Generate Playground
+                              </button>
+                              
+                              <button
+                                onClick={handleTogglePlaygroundMode}
+                                className="px-4 py-2 rounded-lg font-medium transition-all duration-200 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       
                       {/* Action Buttons - Always reserve space but only visible on hover */}
                       <div className="flex items-center justify-between mt-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
@@ -937,20 +1076,38 @@ export const ChatArea: React.FC = () => {
                           </button>
                         </div>
                         
-                        {/* Generate Quiz Button - Only show for individual research mode responses */}
+                        {/* Action Buttons for research mode responses */}
                         {message.type === 'ai' && message.mode === 'research' && (
-                          <button
-                            onClick={handleOpenQuizModal}
-                            disabled={isGeneratingQuiz}
-                            className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 ${
-                              isGeneratingQuiz 
-                                ? 'bg-purple-100 dark:bg-purple-900/20 text-purple-600 cursor-not-allowed' 
-                                : 'bg-purple-500 hover:bg-purple-600 text-white shadow-md hover:shadow-lg'
-                            }`}
-                          >
-                            <Brain className={`w-4 h-4 ${isGeneratingQuiz ? 'animate-pulse' : ''}`} />
-                            {isGeneratingQuiz ? 'Generating...' : 'Generate Quiz'}
-                          </button>
+                          <div className="flex items-center gap-3">
+                            {/* Generate Playground Button - Show when message contains YouTube videos */}
+                            {message.content.includes('<youtube-cards>') && (
+                              <button
+                                onClick={handleTogglePlaygroundMode}
+                                className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 ${
+                                  playgroundMode 
+                                    ? 'bg-green-100 dark:bg-green-900/20 text-green-600 border border-green-300' 
+                                    : 'bg-blue-500 hover:bg-blue-600 text-white shadow-md hover:shadow-lg'
+                                }`}
+                              >
+                                <Play className="w-4 h-4" />
+                                {playgroundMode ? 'Exit Playground' : 'Generate Playground'}
+                              </button>
+                            )}
+                            
+                            {/* Generate Quiz Button */}
+                            <button
+                              onClick={handleOpenQuizModal}
+                              disabled={isGeneratingQuiz}
+                              className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 ${
+                                isGeneratingQuiz 
+                                  ? 'bg-purple-100 dark:bg-purple-900/20 text-purple-600 cursor-not-allowed' 
+                                  : 'bg-purple-500 hover:bg-purple-600 text-white shadow-md hover:shadow-lg'
+                              }`}
+                            >
+                              <Brain className={`w-4 h-4 ${isGeneratingQuiz ? 'animate-pulse' : ''}`} />
+                              {isGeneratingQuiz ? 'Generating...' : 'Generate Quiz'}
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
