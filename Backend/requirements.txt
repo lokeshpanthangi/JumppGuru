@@ -13,3 +13,4 @@ websockets
 sarvamai
 pillow
 boto3
+bs4
