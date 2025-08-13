@@ -546,8 +546,8 @@ export const ChatArea: React.FC = () => {
     const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY;
     
     try {
-      // Call ElevenLabs API with character timestamps
-      const ttsResponse = await fetch('https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM/with-timestamps', {
+      // Call ElevenLabs API with character timestamps using Raju voice
+      const ttsResponse = await fetch('https://api.elevenlabs.io/v1/text-to-speech/zT03pEAEi0VHKciJODfn/with-timestamps', {
         method: 'POST',
         headers: {
           'xi-api-key': apiKey,
@@ -561,7 +561,7 @@ export const ChatArea: React.FC = () => {
             similarity_boost: 0.75,
             style: 0.0,
             use_speaker_boost: true,
-            speed: 0.8
+            speed: 0.75
           }
         })
       });
