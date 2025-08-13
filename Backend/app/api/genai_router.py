@@ -125,12 +125,15 @@ async def _stream_tutorial_content(payload: GenAIRequest) -> AsyncGenerator[str,
                     candidate = chunk.candidates[0]
                     if hasattr(candidate, 'content') and candidate.content:
                         for part in candidate.content.parts:
-                            
+                            # current_text_block = ""
+
                             # Handle text streaming
                             if hasattr(part, "text") and part.text:
                                 current_text_block += part.text
                                 text_only_parts.append(part.text)
                                 
+                                # blocks.append(current_text_block)
+
                                 # Stream text chunk to frontend
                                 text_data = {
                                     "type": "text_chunk",
@@ -141,7 +144,13 @@ async def _stream_tutorial_content(payload: GenAIRequest) -> AsyncGenerator[str,
                                 
                             # Handle complete image
                             elif hasattr(part, "inline_data") and part.inline_data:
+                                text_data = {
+                                    "type": "text",
+                                    "content": current_text_block
+                                }
+                                blocks.append(text_data)
                                 # Send loading indicator for image
+                                current_text_block = ""
                                 loading_data = {
                                     "type": "image_loading",
                                     "message": f"Processing image {image_index + 1}...",
@@ -183,8 +192,8 @@ async def _stream_tutorial_content(payload: GenAIRequest) -> AsyncGenerator[str,
                 continue
         
         # Finalize text block
-        if current_text_block:
-            blocks.append({"type": "text", "content": current_text_block})
+        # if current_text_block:
+        #     blocks.append({"type": "text", "content": current_text_block})
         
         # Generate clean text content
         raw_text = "".join(text_only_parts)
@@ -438,3 +447,25 @@ async def get_chat_history(user_id: str):
     except Exception as e:
         print(f"Error fetching chat history: {e}")
         raise HTTPException(status_code=500, detail="Error retrieving chat history")
+
+
+
+
+
+
+@router.get("/getContent/{chat_id}")
+async def get_chat_history(chat_id: str):
+    # Query documents where chat_id matches and role is "assistant"
+    results = multimodal_chat_collection.find(
+        {"chat_id": chat_id, "role": "assistant"},
+        {"_id": 0, "text_content": 1}  # Only project text_content
+    )
+    
+    # Extract and clean text_content
+    content_list = []
+    for doc in results:
+        if "text_content" in doc:
+            cleaned_text = re.sub(r"\n+", " ", doc["text_content"])  # replace multiple newlines with space
+            content_list.append(cleaned_text.strip())
+    
+    return {"text_content": content_list}
