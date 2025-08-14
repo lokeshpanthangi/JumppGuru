@@ -159,7 +159,8 @@ async def generate_spec_from_video(video_url: str) -> str:
         # Parse the JSON response
         print(generated_text,"=======================================================")
         parsed_response = parse_json_response(generated_text)
-        spec = parsed_response.get('spec', '')
+        spec = "I have strict budget constraints, so please do not include unnecessary code, libraries, very strictly dont use any image in base64, or features that aren’t essential. what you use inplace of image is use Unicode emoji characters when needed. I still want a clean, visually appealing UI with good functionality — but keep it minimal and optimized. Write only the required code"
+        spec += parsed_response.get('spec', '')
         
         if not spec:
             # Fallback: try to extract spec from response text directly
@@ -209,7 +210,7 @@ async def generate_code_from_spec(spec: str) -> str:
 
         print(payload,"=======================================================")
         
-        url="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent"
+        url="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
         # Make the HTTP request
         response = requests.post(url, headers=headers, json=payload)
         response.raise_for_status()

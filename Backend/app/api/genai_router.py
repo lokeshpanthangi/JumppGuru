@@ -466,6 +466,6 @@ async def get_chat_history(chat_id: str):
     for doc in results:
         if "text_content" in doc:
             cleaned_text = re.sub(r"\n+", " ", doc["text_content"])  # replace multiple newlines with space
-            cleaned_text = cleaned_text.strip()[:30]  # limit to 30 characters
+            cleaned_text = cleaned_text.strip()[:300]  # limit to 30 characters
             content_list.append(cleaned_text)
     return {"text_content": content_list}
