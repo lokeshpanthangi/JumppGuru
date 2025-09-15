@@ -1,22 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { marked } from 'marked';
 import { YouTubeCards, parseYouTubeCards } from './YouTubeCards';
+import { ImageModal } from './ImageModal';
 
 // Configure marked for better rendering
 marked.setOptions({
   breaks: true,
-  gfm: true,
-  headerIds: false,
-  mangle: false
+  gfm: true
 });
 
 interface Block {
   type: 'text' | 'image';
   content?: string;
-  data_url?: string;
+  data_url?: string; // Legacy base64 format
+  image_url?: string; // New S3 URL format
   alt?: string;
   images?: Array<{
     data_url?: string;
+    image_url?: string;
     url?: string;
     src?: string;
     base64?: string;
@@ -27,9 +28,13 @@ interface Block {
 interface FastBlockRendererProps {
   content: string;
   className?: string;
+  playgroundMode?: boolean;
+  onVideoSelectForPlayground?: (video: any) => void;
 }
 
-export const FastBlockRenderer: React.FC<FastBlockRendererProps> = ({ content, className }) => {
+export const FastBlockRenderer: React.FC<FastBlockRendererProps> = ({ content, className, playgroundMode, onVideoSelectForPlayground }) => {
+  const [selectedImage, setSelectedImage] = useState<{ src: string; alt: string } | null>(null);
+  
   // Parse YouTube cards from content
   const { content: cleanedContent, videos, remainingVideos } = parseYouTubeCards(content);
   
@@ -59,10 +64,23 @@ export const FastBlockRenderer: React.FC<FastBlockRendererProps> = ({ content, c
         {/* Render YouTube cards if present */}
         {videos && (
           <div style={{ marginTop: '24px' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '500', color: 'var(--text-primary)', marginBottom: '12px' }}>📺 Related Videos</h3>
-            <YouTubeCards videos={videos} remainingVideos={remainingVideos} />
+            <h3 style={{ fontSize: '18px', fontWeight: '500', color: 'var(--text-primary)', marginBottom: '12px' }}>Related Videos</h3>
+            <YouTubeCards 
+              videos={videos} 
+              remainingVideos={remainingVideos}
+              playgroundMode={playgroundMode}
+              onVideoSelectForPlayground={onVideoSelectForPlayground}
+            />
           </div>
         )}
+        
+        {/* Image Modal */}
+        <ImageModal
+          isOpen={selectedImage !== null}
+          onClose={() => setSelectedImage(null)}
+          imageSrc={selectedImage?.src || ''}
+          alt={selectedImage?.alt}
+        />
       </div>
     );
   }
@@ -113,22 +131,25 @@ export const FastBlockRenderer: React.FC<FastBlockRendererProps> = ({ content, c
               return (
                 <div key={index} style={{ marginBottom: '20px' }}>
                   {block.images.map((img, imgIndex) => {
-                    const src = img.data_url || img.url || img.src || img.base64 || img.data;
+                    // Prioritize image_url (S3 URL) over other formats
+                    const src = img.image_url || img.data_url || img.url || img.src || img.base64 || img.data;
                     if (!src) return null;
                     
                     return (
                       <img
                         key={imgIndex}
                         src={src}
-                        alt={block.alt || ''}
+                        alt={block.alt || 'Generated illustration'}
                         style={{ 
                           maxWidth: '50%', 
                           margin: '10px 0',
                           height: 'auto',
                           borderRadius: '8px',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                          cursor: 'pointer'
                         }}
                         loading="lazy"
+                        onClick={() => setSelectedImage({ src, alt: block.alt || 'Generated illustration' })}
                       />
                     );
                   })}
@@ -136,22 +157,24 @@ export const FastBlockRenderer: React.FC<FastBlockRendererProps> = ({ content, c
               );
             }
             
-            // Handle single image
-            const src = block.data_url;
+            // Handle single image - prioritize image_url (S3 URL) over data_url (base64)
+            const src = block.image_url || block.data_url;
             if (src) {
               return (
                 <img
                   key={index}
                   src={src}
-                  alt={block.alt || ''}
+                  alt={block.alt || 'Generated illustration'}
                   style={{ 
                     maxWidth: '50%', 
                     margin: '10px 0',
                     height: 'auto',
                     borderRadius: '8px',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                    cursor: 'pointer'
                   }}
                   loading="lazy"
+                  onClick={() => setSelectedImage({ src, alt: block.alt || 'Generated illustration' })}
                 />
               );
             }
@@ -162,10 +185,23 @@ export const FastBlockRenderer: React.FC<FastBlockRendererProps> = ({ content, c
         {/* Render YouTube cards if present */}
         {videos && (
           <div style={{ marginTop: '24px' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '500', color: 'var(--text-primary)', marginBottom: '12px' }}>📺 Related Videos</h3>
-            <YouTubeCards videos={videos} remainingVideos={remainingVideos} />
+            <h3 style={{ fontSize: '18px', fontWeight: '500', color: 'var(--text-primary)', marginBottom: '12px' }}>Related Videos</h3>
+            <YouTubeCards 
+              videos={videos} 
+              remainingVideos={remainingVideos}
+              playgroundMode={playgroundMode}
+              onVideoSelectForPlayground={onVideoSelectForPlayground}
+            />
           </div>
         )}
+        
+        {/* Image Modal */}
+        <ImageModal
+          isOpen={selectedImage !== null}
+          onClose={() => setSelectedImage(null)}
+          imageSrc={selectedImage?.src || ''}
+          alt={selectedImage?.alt}
+        />
       </div>
     );
   } catch (error) {
@@ -192,10 +228,23 @@ export const FastBlockRenderer: React.FC<FastBlockRendererProps> = ({ content, c
         {/* Render YouTube cards if present */}
         {videos && (
           <div style={{ marginTop: '24px' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '500', color: 'var(--text-primary)', marginBottom: '12px' }}>📺 Related Videos</h3>
-            <YouTubeCards videos={videos} remainingVideos={remainingVideos} />
+            <h3 style={{ fontSize: '18px', fontWeight: '500', color: 'var(--text-primary)', marginBottom: '12px' }}>Related Videos</h3>
+            <YouTubeCards 
+              videos={videos} 
+              remainingVideos={remainingVideos}
+              playgroundMode={playgroundMode}
+              onVideoSelectForPlayground={onVideoSelectForPlayground}
+            />
           </div>
         )}
+        
+        {/* Image Modal */}
+        <ImageModal
+          isOpen={selectedImage !== null}
+          onClose={() => setSelectedImage(null)}
+          imageSrc={selectedImage?.src || ''}
+          alt={selectedImage?.alt}
+        />
       </div>
     );
   }

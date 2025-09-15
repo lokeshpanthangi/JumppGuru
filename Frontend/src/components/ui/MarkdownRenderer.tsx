@@ -2,15 +2,17 @@ import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { CodeBlock } from './CodeBlock';
 import { YouTubeCards, parseYouTubeCards } from './YouTubeCards';
+import { ImageModal } from './ImageModal';
 
 // New ImageRenderer component for proper base64 and URL image handling
 interface ImageRendererProps {
   src?: string;
   alt?: string;
   title?: string;
+  onImageClick?: (src: string, alt: string) => void;
 }
 
-const ImageRenderer: React.FC<ImageRendererProps> = ({ src, alt, title }) => {
+const ImageRenderer: React.FC<ImageRendererProps> = ({ src, alt, title, onImageClick }) => {
   const [imageState, setImageState] = useState<'loading' | 'loaded' | 'error'>('loading');
   const [processedSrc, setProcessedSrc] = useState<string>('');
 
@@ -26,7 +28,7 @@ const ImageRenderer: React.FC<ImageRendererProps> = ({ src, alt, title }) => {
     
     // Handle different image source types
     if (src.startsWith('http://') || src.startsWith('https://')) {
-      // Regular URL - use as is
+      // Regular URL (including S3 URLs) - use as is
       finalSrc = src;
     } else if (src.startsWith('data:image/')) {
       // Already a proper data URL - use as is
@@ -86,7 +88,7 @@ const ImageRenderer: React.FC<ImageRendererProps> = ({ src, alt, title }) => {
             alt={alt || 'Generated image'}
             title={title}
             loading="lazy"
-            className={`max-w-[50%] h-auto rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 transition-opacity duration-300 ${
+            className={`max-w-[50%] h-auto rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 transition-opacity duration-300 cursor-pointer hover:opacity-90 ${
               imageState === 'loaded' ? 'opacity-100' : 'opacity-0 absolute inset-0'
             }`}
             style={{ 
@@ -96,6 +98,7 @@ const ImageRenderer: React.FC<ImageRendererProps> = ({ src, alt, title }) => {
             }}
             onLoad={handleImageLoad}
             onError={handleImageError}
+            onClick={() => onImageClick && onImageClick(processedSrc, alt || 'Generated image')}
           />
         )}
       </div>
@@ -116,14 +119,18 @@ const ImageRenderer: React.FC<ImageRendererProps> = ({ src, alt, title }) => {
 interface MarkdownRendererProps {
   content: string;
   className?: string;
+  playgroundMode?: boolean;
+  onVideoSelectForPlayground?: (video: any) => void;
 }
 
-export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className }) => {
+export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className, playgroundMode, onVideoSelectForPlayground }) => {
+  const [selectedImage, setSelectedImage] = useState<{ src: string; alt: string } | null>(null);
+  
   // Parse YouTube cards from content
   const { content: cleanedContent, videos, remainingVideos } = parseYouTubeCards(content);
 
   return (
-    <div className={`prose max-w-none ${className || ''}`}>
+    <div className={`prose max-w-none prose-slate dark:prose-invert ${className || ''}`}>
       <ReactMarkdown
         urlTransform={(url: string) => {
           // Allow data URLs for base64 images
@@ -146,7 +153,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
               </CodeBlock>
             );
           },
-          // Custom paragraph renderer
+          // Custom paragraph renderer with better spacing
           p({ children }) {
             return (
               <p className="text-text-primary leading-relaxed mb-4 last:mb-0">
@@ -223,7 +230,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
           },
           li({ children }) {
             return (
-              <li className="text-text-primary leading-relaxed mb-2" style={{ marginLeft: 0, paddingLeft: 0, display: 'list-item' }}>
+              <li className="text-text-primary leading-relaxed" style={{ marginLeft: 0, paddingLeft: 0, display: 'list-item' }}>
                 {children}
               </li>
             );
@@ -275,7 +282,12 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
           img({ src, alt, title }) {
             // Ensure src is a string; ReactMarkdown might pass null/undefined in some cases
             const safeSrc = typeof src === 'string' ? src : '';
-            return <ImageRenderer src={safeSrc} alt={alt} title={title} />;
+            return <ImageRenderer 
+              src={safeSrc} 
+              alt={alt} 
+              title={title} 
+              onImageClick={(imgSrc, imgAlt) => setSelectedImage({ src: imgSrc, alt: imgAlt })} 
+            />;
           },
         }}
       >
@@ -285,10 +297,23 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
       {/* Render YouTube cards if present */}
       {videos && (
         <div className="mt-6">
-          <h3 className="text-lg font-medium text-text-primary mb-3">📺 Related Videos</h3>
-          <YouTubeCards videos={videos} remainingVideos={remainingVideos} />
+          <h3 className="text-lg font-medium text-text-primary mb-3">Related Videos</h3>
+          <YouTubeCards 
+            videos={videos} 
+            remainingVideos={remainingVideos}
+            playgroundMode={playgroundMode}
+            onVideoSelectForPlayground={onVideoSelectForPlayground}
+          />
         </div>
       )}
+      
+      {/* Image Modal */}
+      <ImageModal
+        isOpen={selectedImage !== null}
+        onClose={() => setSelectedImage(null)}
+        imageSrc={selectedImage?.src || ''}
+        alt={selectedImage?.alt}
+      />
     </div>
   );
 };

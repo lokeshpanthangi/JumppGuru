@@ -29,40 +29,34 @@ export const YouTubeModal: React.FC<YouTubeModalProps> = ({ isOpen, onClose, vid
 
   return (
     <div 
-      className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4"
       onClick={handleBackdropClick}
     >
-      <div className="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900 truncate pr-4">
-            {title}
-          </h3>
-          <button
-            onClick={onClose}
-            className="flex-shrink-0 p-1 rounded-full hover:bg-gray-100 transition-colors"
-          >
-            <X className="w-6 h-6 text-gray-500" />
-          </button>
-        </div>
-        
-        {/* Video Content */}
-        <div className="relative aspect-video bg-black">
-          {embedUrl ? (
-            <iframe
-              src={embedUrl}
-              title={title}
-              className="w-full h-full"
-              frameBorder="0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-            />
-          ) : (
-            <div className="flex items-center justify-center h-full text-white">
-              <p>Unable to load video</p>
-            </div>
-          )}
-        </div>
+      {/* Close button */}
+      <button
+        onClick={onClose}
+        className="absolute top-6 right-6 p-2 rounded-full bg-black bg-opacity-50 hover:bg-opacity-70 transition-all duration-200 z-10"
+        aria-label="Close video"
+      >
+        <X className="w-6 h-6 text-white" />
+      </button>
+      
+      {/* Video Content */}
+      <div className="relative aspect-video bg-black rounded-lg overflow-hidden shadow-2xl max-w-4xl w-full max-h-[70vh]">
+        {embedUrl ? (
+          <iframe
+            src={embedUrl}
+            title={title}
+            className="w-full h-full"
+            frameBorder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+          />
+        ) : (
+          <div className="flex items-center justify-center h-full text-white">
+            <p>Unable to load video</p>
+          </div>
+        )}
       </div>
     </div>
   );

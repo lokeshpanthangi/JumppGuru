@@ -6,11 +6,12 @@ import { HelmetProvider } from "react-helmet-async";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChatProvider } from "./contexts/ChatContext";
 import { Sidebar } from "./components/Sidebar";
-import { ThemeToggle } from "./components/ThemeToggle";
+
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import DeepLearning from "./pages/DeepLearning";
 import Notebook from "./pages/Notebook";
+import YouTubePlayground from "./pages/YouTubePlayground";
 
 const queryClient = new QueryClient();
 
@@ -41,12 +42,13 @@ const pageTransition = {
 const AppLayout = () => {
   const location = useLocation();
   const isNotebookPage = location.pathname.startsWith('/notebook/');
+  const isPlaygroundPage = location.pathname.startsWith('/playground/');
   
   return (
     <div className="h-screen bg-background flex">
-      {!isNotebookPage && <Sidebar />}
+      {!isNotebookPage && !isPlaygroundPage && <Sidebar />}
       <AnimatedRoutes />
-      <ThemeToggle />
+
     </div>
   );
 };
@@ -99,6 +101,21 @@ const AnimatedRoutes = () => {
               className="w-full relative overflow-y-auto"
             >
               <Notebook />
+            </motion.div>
+          } 
+        />
+        <Route 
+          path="/playground/:videoId" 
+          element={
+            <motion.div
+              initial="initial"
+              animate="in"
+              exit="out"
+              variants={pageVariants}
+              transition={pageTransition}
+              className="w-full relative overflow-y-auto"
+            >
+              <YouTubePlayground />
             </motion.div>
           } 
         />

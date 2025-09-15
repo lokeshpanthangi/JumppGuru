@@ -85,7 +85,7 @@
   }
 }
 
-/* JumppGuru Design System - Modern AI Chat Interface */
+/* JumpApp Design System - Modern AI Chat Interface */
 
 @layer base {
   :root {
@@ -192,7 +192,7 @@
     
     /* Chat Interface */
     --chat-bg: 220 13% 14%;
-    --message-user-bg: 215 25% 20%;
+    --message-user-bg: 220 13% 20%;
     --message-ai-bg: transparent;
     --input-bg: 220 13% 13%;
     --input-border: 215 25% 20%;
@@ -399,6 +399,16 @@
   
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
     background: hsl(var(--text-muted) / 0.5);
+  }
+  
+  /* Hidden scrollbar - keeps functionality but hides visual scrollbar */
+  .scrollbar-hide {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* Internet Explorer and Edge */
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none; /* Chrome, Safari and Opera */
   }
 }
 

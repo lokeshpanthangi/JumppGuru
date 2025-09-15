@@ -23,8 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 
-# Prevent logo.png from being tracked for modifications
-public/logo.png
+
 
 
 # Added by apilib
