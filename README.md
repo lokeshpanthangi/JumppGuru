@@ -112,7 +112,7 @@ graph TB
 
 #### 1. Clone the Repository
 ```bash
-git clone https://github.com/your-username/JumppGuru.git
+git clone https://github.com/lokeshpanthangi/JumppGuru.git
 cd JumppGuru
 ```
 
